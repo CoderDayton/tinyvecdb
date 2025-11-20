@@ -3,13 +3,18 @@ from __future__ import annotations
 import sqlite3
 import struct
 import numpy as np
-from typing import List, Sequence, Union, Optional, Tuple, Any, Iterable
+from collections.abc import Iterable, Sequence
+from typing import Any, TYPE_CHECKING
 import sqlite_vec
 from pathlib import Path
-from typing import Dict
 import json
 
-from . import Document, DistanceStrategy
+from .types import Document, DistanceStrategy
+
+if TYPE_CHECKING:
+    from langchain_core.embeddings import Embeddings
+    from .integrations.langchain import TinyVecDBVectorStore
+    from .integrations.llamaindex import TinyVecDBLlamaStore
 
 
 def _serialize_float32(vector: Sequence[float]) -> bytes:
@@ -30,7 +35,7 @@ class VectorDB:
 
     def __init__(
         self,
-        path: Union[str, Path] = ":memory:",
+        path: str | Path = ":memory:",
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
     ):
         self.path = str(path)
@@ -46,9 +51,10 @@ class VectorDB:
             pass
         self.conn.enable_load_extension(False)
 
-        self._dim: Optional[int] = None
+        self._dim: int | None = None
         self._table_name = "tinyvec_items"
         self._create_table()
+        self._detect_dimension()
 
     # ------------------------------------------------------------------ #
     # Internal helpers
@@ -65,6 +71,23 @@ class VectorDB:
             """
         )
         # Virtual table is created lazily on first insert once we know dimension
+
+    def _detect_dimension(self) -> None:
+        """Detect dimension from existing data if database already has vectors."""
+        try:
+            cursor = self.conn.execute(
+                f"SELECT LENGTH(embedding) FROM {self._table_name} LIMIT 1"
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                # embedding is stored as float32 (4 bytes per float)
+                dim = row[0] // 4
+                self._dim = dim
+                # Ensure virtual table exists with correct dimension
+                self._ensure_virtual_table(dim)
+        except sqlite3.OperationalError:
+            # Table doesn't exist yet or is empty
+            pass
 
     def _ensure_virtual_table(self, dim: int) -> None:
         if self._dim is not None and self._dim != dim:
@@ -87,10 +110,10 @@ class VectorDB:
     def add_texts(
         self,
         texts: Sequence[str],
-        metadatas: Optional[Sequence[dict]] = None,
-        embeddings: Optional[Sequence[Sequence[float]]] = None,
-        ids: Optional[Sequence[int]] = None,
-    ) -> List[int]:
+        metadatas: Sequence[dict] | None = None,
+        embeddings: Sequence[Sequence[float]] | None = None,
+        ids: Sequence[int] | None = None,
+    ) -> list[int]:
         """
         Add texts with optional pre-computed embeddings.
         Returns the assigned integer IDs.
@@ -120,7 +143,8 @@ class VectorDB:
         # Normalise for cosine if needed
         if self.distance_strategy == DistanceStrategy.COSINE:
             embeddings = [
-                _normalize_l2(np.array(e, dtype=np.float32)) for e in embeddings
+                _normalize_l2(np.array(e, dtype=np.float32)).tolist()
+                for e in embeddings
             ]
 
         rows = []
@@ -174,7 +198,7 @@ class VectorDB:
         texts: Sequence[str],
         embeddings: Sequence[Sequence[float]],
         ids: Sequence[int],
-        metadatas: Optional[Sequence[dict]] = None,
+        metadatas: Sequence[dict] | None = None,
     ) -> None:
         """Upsert by explicit IDs (add_texts handles ON CONFLICT)."""
         # Reuse add_texts logic – it's already upsert-capable
@@ -195,10 +219,10 @@ class VectorDB:
 
     def similarity_search(
         self,
-        query: Union[str, Sequence[float]],
+        query: str | Sequence[float],
         k: int = 5,
-        filter: Optional[Dict[str, Any]] = None,
-    ) -> List[Tuple[Document, float]]:
+        filter: dict[str, Any] | None = None,
+    ) -> list[tuple[Document, float]]:
         """
         Return top-k documents with distances.
         Supports vector queries (text queries require embeddings integration).
@@ -229,7 +253,7 @@ class VectorDB:
         if self.distance_strategy == DistanceStrategy.COSINE:
             query_vec = _normalize_l2(query_vec)
 
-        blob = _serialize_float32(query_vec)
+        blob = _serialize_float32(query_vec.tolist())
 
         try:
             # Fast path: use sqlite-vec if available
@@ -267,9 +291,57 @@ class VectorDB:
 
         return results
 
+    def max_marginal_relevance_search(
+        self,
+        query: str | Sequence[float],
+        k: int = 5,
+        fetch_k: int = 20,
+        filter: dict[str, Any] | None = None,
+    ) -> list[Document]:
+        """
+        Max marginal relevance search.
+        """
+        # First get top fetch_k candidates
+        candidates_with_scores = self.similarity_search(query, k=fetch_k, filter=filter)
+        candidates = [doc for doc, _ in candidates_with_scores]
+
+        if len(candidates) <= k:
+            return candidates
+
+        # MMR selection
+        selected = []
+        unselected = candidates.copy()
+
+        # Start with the most relevant document
+        selected.append(unselected.pop(0))
+
+        while len(selected) < k:
+            mmr_scores = []
+            for candidate in unselected:
+                relevance = next(
+                    score for doc, score in candidates_with_scores if doc == candidate
+                )
+                diversity = min(
+                    next(
+                        score
+                        for doc, score in candidates_with_scores
+                        if doc == selected_doc
+                    )
+                    for selected_doc in selected
+                )
+                mmr_score = 0.5 * relevance - 0.5 * diversity
+                mmr_scores.append((mmr_score, candidate))
+
+            # Select the candidate with the highest MMR score
+            mmr_scores.sort(key=lambda x: x[0], reverse=True)
+            selected.append(mmr_scores[0][1])
+            unselected.remove(mmr_scores[0][1])
+
+        return selected
+
     def _brute_force_search(
         self, query_vec: np.ndarray, k: int
-    ) -> List[Tuple[int, float]]:
+    ) -> list[tuple[int, float]]:
         """Pure-NumPy fallback for no-extension environments."""
         rows = self.conn.execute(
             f"SELECT id, embedding FROM {self._table_name}"
@@ -295,7 +367,7 @@ class VectorDB:
         indices = np.argsort(distances)[:k]
         return [(ids[i], distances[i]) for i in indices]
 
-    def _matches_filter(self, rowid: int, filter_dict: Dict[str, Any]) -> bool:
+    def _matches_filter(self, rowid: int, filter_dict: dict[str, Any]) -> bool:
         """Simple JSON filter matcher (expand for complex in v1)."""
         meta_json = self.conn.execute(
             f"SELECT metadata FROM {self._table_name} WHERE id = ?",
@@ -309,6 +381,21 @@ class VectorDB:
             if meta.get(key) != value:  # exact match for now
                 return False
         return True
+
+    # ------------------------------------------------------------------ #
+    # Integrations
+    # ------------------------------------------------------------------ #
+    def as_langchain(
+        self, embeddings: Embeddings | None = None
+    ) -> TinyVecDBVectorStore:
+        from .integrations.langchain import TinyVecDBVectorStore
+
+        return TinyVecDBVectorStore(db_path=self.path, embedding=embeddings)
+
+    def as_llama_index(self) -> TinyVecDBLlamaStore:
+        from .integrations.llamaindex import TinyVecDBLlamaStore
+
+        return TinyVecDBLlamaStore(db_path=self.path)
 
     # ------------------------------------------------------------------ #
     # Convenience

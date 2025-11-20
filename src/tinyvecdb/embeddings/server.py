@@ -10,7 +10,7 @@ from .models import embed_texts, DEFAULT_MODEL
 app = FastAPI(
     title="TinyVecDB Embeddings",
     description="OpenAI-compatible /v1/embeddings endpoint – 100% local",
-    version="0.1.0",
+    version="0.0.1",
     openapi_url="/openapi.json",
     docs_url="/docs",
 )

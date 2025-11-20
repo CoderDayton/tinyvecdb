@@ -19,4 +19,7 @@ build/
 # Databases
 *.db
 *.sqlite
+
+# Project specific
 tinyvecdb_plan.md
+AGENTS.md
