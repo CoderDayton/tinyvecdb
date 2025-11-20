@@ -10,20 +10,26 @@ requires-python = ">=3.10"
 dependencies = [
     "sqlite-vec>=0.1.2",
     "numpy>=2.0",
+    "fastapi>=0.121.2",
+    "uvicorn>=0.38.0",
+    "sentence-transformers>=5.1.2",
 ]
 
-[project.optional-dependencies]
-server = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
+[dependency-groups]
 dev = ["pytest>=8.0", "pytest-cov", "jupyterlab", "sentence-transformers"]
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sentence-transformers>=3.1",
+    "torch>=2.5.0, <3.0.0",
+]
+dev = ["pytest>=8.0", "pytest-cov", "jupyterlab"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = [
-    "pytest>=8.0",
-    "pytest-cov",
-    "jupyterlab",
-    "sentence-transformers",
-]
+[project.scripts]
+tinyvecdb-server = "tinyvecdb.embeddings.server:run_server"

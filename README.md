@@ -21,7 +21,7 @@ Perfect for private knowledge bases, local copilot tools, edge-device RAG, and a
 ## Quickstart
 
 ```bash
-uv pip install tinyvecdb    # or: pip install tinyvecdb[server]
+uv pip install tinyvecdb[server]    # or: pip install tinyvecdb[server]
 ```
 
 ```python

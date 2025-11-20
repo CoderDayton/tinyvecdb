@@ -6,6 +6,8 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+.mypy_cache/
+.pytest_cache/
 
 # IDE
 .vscode/
@@ -17,3 +19,4 @@ build/
 # Databases
 *.db
 *.sqlite
+tinyvecdb_plan.md
