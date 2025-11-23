@@ -1,7 +1,7 @@
 site_name: SimpleVecDB Docs
-site_url: https://coderdayton.github.io/simplevecdb
+site_url: https://coderdayton.github.io/SimpleVecDB
 repo_url: https://github.com/coderdayton/simplevecdb
-repo_name: simplevecdb
+repo_name: SimpleVecDB
 
 theme:
   name: shadcn

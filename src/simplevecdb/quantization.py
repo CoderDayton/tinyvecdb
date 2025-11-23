@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+import struct
+import numpy as np
+from .core import Quantization
+
+
+def normalize_l2(vector: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(vector)
+    return vector if norm == 0 else vector / norm
+
+
+class QuantizationStrategy:
+    def __init__(self, quantization: Quantization):
+        self.quantization = quantization
+
+    def serialize(self, vector: np.ndarray) -> bytes:
+        """Serialize a normalized float vector according to quantization mode."""
+        if self.quantization == Quantization.FLOAT:
+            return struct.pack("<%sf" % len(vector), *(float(x) for x in vector))
+
+        elif self.quantization == Quantization.INT8:
+            # Scalar quantization: scale to [-128, 127]
+            scaled = np.clip(np.round(vector * 127), -128, 127).astype(np.int8)
+            return scaled.tobytes()
+
+        elif self.quantization == Quantization.BIT:
+            # Binary quantization: threshold at 0 → pack bits
+            bits = (vector > 0).astype(np.uint8)
+            packed = np.packbits(bits)
+            return packed.tobytes()
+
+        raise ValueError(f"Unsupported quantization: {self.quantization}")
+
+    def deserialize(self, blob: bytes, dim: int | None) -> np.ndarray:
+        """Reverse serialization for fallback path."""
+        if self.quantization == Quantization.FLOAT:
+            return np.frombuffer(blob, dtype=np.float32)
+
+        elif self.quantization == Quantization.INT8:
+            return np.frombuffer(blob, dtype=np.int8).astype(np.float32) / 127.0
+
+        elif self.quantization == Quantization.BIT and dim is not None:
+            unpacked = np.unpackbits(np.frombuffer(blob, dtype=np.uint8))
+            v = unpacked[:dim].astype(np.float32)
+            return np.where(v == 1, 1.0, -1.0)
+
+        raise ValueError(
+            f"Unsupported quantization: {self.quantization} or unknown dim {dim}"
+        )

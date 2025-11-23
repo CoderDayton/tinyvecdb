@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sqlite3
-import struct
 import json
 import re
 import numpy as np
@@ -13,59 +12,15 @@ import platform
 import multiprocessing
 import itertools
 
-from .types import Document, DistanceStrategy, StrEnum
+from .types import Document, DistanceStrategy, Quantization
 from .utils import _import_optional
+from .quantization import QuantizationStrategy
+from .search import SearchEngine
 
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
     from .integrations.langchain import SimpleVecDBVectorStore
     from .integrations.llamaindex import SimpleVecDBLlamaStore
-
-
-class Quantization(StrEnum):
-    FLOAT = "float"
-    INT8 = "int8"
-    BIT = "bit"
-
-
-def _serialize_vector(vector: np.ndarray, quant: Quantization) -> bytes:
-    """Serialize a normalized float vector according to quantization mode."""
-    if quant == Quantization.FLOAT:
-        return struct.pack("<%sf" % len(vector), *(float(x) for x in vector))
-
-    elif quant == Quantization.INT8:
-        # Scalar quantization: scale to [-128, 127]
-        scaled = np.clip(np.round(vector * 127), -128, 127).astype(np.int8)
-        return scaled.tobytes()
-
-    elif quant == Quantization.BIT:
-        # Binary quantization: threshold at 0 → pack bits
-        bits = (vector > 0).astype(np.uint8)
-        packed = np.packbits(bits)
-        return packed.tobytes()
-
-    raise ValueError(f"Unsupported quantization: {quant}")
-
-
-def _dequantize_vector(blob: bytes, dim: int | None, quant: Quantization) -> np.ndarray:
-    """Reverse serialization for fallback path."""
-    if quant == Quantization.FLOAT:
-        return np.frombuffer(blob, dtype=np.float32)
-
-    elif quant == Quantization.INT8:
-        return np.frombuffer(blob, dtype=np.int8).astype(np.float32) / 127.0
-
-    elif quant == Quantization.BIT and dim is not None:
-        unpacked = np.unpackbits(np.frombuffer(blob, dtype=np.uint8))
-        v = unpacked[:dim].astype(np.float32)
-        return np.where(v == 1, 1.0, -1.0)
-
-    raise ValueError(f"Unsupported quantization: {quant} or unknown dim {dim}")
-
-
-def _normalize_l2(vector: np.ndarray) -> np.ndarray:
-    norm = np.linalg.norm(vector)
-    return vector if norm == 0 else vector / norm
 
 
 def _batched(iterable: Iterable[Any], n: int) -> Iterable[Sequence[Any]]:
@@ -213,6 +168,7 @@ class VectorCollection:
         self.name = name
         self.distance_strategy = distance_strategy
         self.quantization = quantization
+        self._quantizer = QuantizationStrategy(quantization)
 
         # Sanitize name to prevent SQL injection
         if not re.match(r"^[a-zA-Z0-9_]+$", name):
@@ -231,6 +187,19 @@ class VectorCollection:
         self._fts_table_name = f"{self._table_name}_fts"
         self._fts_enabled = False
         self._dim: int | None = None
+
+        # Initialize SearchEngine after table names are set
+        self._search = SearchEngine(
+            conn=self.conn,
+            table_name=self._table_name,
+            vec_table_name=self._vec_table_name,
+            fts_table_name=self._fts_table_name,
+            fts_enabled=False,  # Will be updated in _ensure_fts_table
+            distance_strategy=self.distance_strategy,
+            quantization=self.quantization,
+            quantizer=self._quantizer,
+            dim_getter=lambda: self._dim,
+        )
 
         self._create_table()
         self._recover_dim()
@@ -269,8 +238,10 @@ class VectorCollection:
                 """
             )
             self._fts_enabled = True
+            self._search._fts_enabled = True
         except sqlite3.OperationalError:
             self._fts_enabled = False
+            self._search._fts_enabled = False
 
     def _upsert_fts_rows(self, ids: Sequence[int], texts: Sequence[str]) -> None:
         if not self._fts_enabled or not ids:
@@ -426,7 +397,7 @@ class VectorCollection:
                 norms = np.linalg.norm(emb_np, axis=1, keepdims=True)
                 emb_np = emb_np / np.maximum(norms, 1e-12)
 
-            serialized = [_serialize_vector(vec, self.quantization) for vec in emb_np]
+            serialized = [self._quantizer.serialize(vec) for vec in emb_np]
 
             rows = []
             for txt, meta, uid in zip(batch_texts, batch_metadatas, batch_ids):
@@ -478,142 +449,22 @@ class VectorCollection:
 
         return all_ids
 
-    def _vector_search_candidates(
-        self,
-        query: str | Sequence[float],
-        k: int,
-        filter: dict[str, Any] | None,
-    ) -> list[tuple[int, float]]:
-        if self._dim is None:
-            return []
-
-        if isinstance(query, str):
-            try:
-                from .embeddings.models import embed_texts
-
-                query_embedding = embed_texts([query])[0]
-                query_vec = np.array(query_embedding, dtype=np.float32)
-            except Exception as e:
-                raise ValueError(
-                    "Text queries require embeddings – install with [server] extra or provide vector query"
-                ) from e
-        else:
-            query_vec = np.array(query, dtype=np.float32)
-
-        if len(query_vec) != self._dim:
-            raise ValueError(
-                f"Query dim {len(query_vec)} != collection dim {self._dim}"
-            )
-
-        if self.distance_strategy == DistanceStrategy.COSINE:
-            query_vec = _normalize_l2(query_vec)
-
-        blob = _serialize_vector(query_vec, self.quantization)
-
-        filter_clause, filter_params = self._build_filter_clause(
-            filter, metadata_column="ti.metadata"
-        )
-
-        match_placeholder = "?"
-        if self.quantization == Quantization.INT8:
-            match_placeholder = "vec_int8(?)"
-        elif self.quantization == Quantization.BIT:
-            match_placeholder = "vec_bit(?)"
-
-        try:
-            sql = f"""
-                SELECT ti.id, distance
-                FROM {self._vec_table_name} vi
-                JOIN {self._table_name} ti ON vi.rowid = ti.id
-                WHERE embedding MATCH {match_placeholder}
-                AND k = ?
-                {filter_clause}
-                ORDER BY distance
-            """
-            rows = self.conn.execute(
-                sql, (blob,) + (k,) + tuple(filter_params)
-            ).fetchall()
-        except sqlite3.OperationalError:
-            rows = self._brute_force_search(query_vec, k, filter)
-
-        return [(int(cid), float(dist)) for cid, dist in rows[:k]]
-
-    def _hydrate_documents(
-        self, candidates: Sequence[tuple[int, float]]
-    ) -> list[tuple[Document, float]]:
-        results: list[tuple[Document, float]] = []
-        for cid, score in candidates:
-            row = self.conn.execute(
-                f"SELECT text, metadata FROM {self._table_name} WHERE id = ?", (cid,)
-            ).fetchone()
-            if not row:
-                continue
-            text, meta_json = row
-            meta = json.loads(meta_json) if meta_json else {}
-            results.append((Document(page_content=text, metadata=meta), score))
-        return results
-
     def similarity_search(
         self,
         query: str | Sequence[float],
         k: int = 5,
         filter: dict[str, Any] | None = None,
     ) -> list[tuple[Document, float]]:
-        candidates = self._vector_search_candidates(query, k, filter)
-        return self._hydrate_documents(candidates)
-
-    def _keyword_search_candidates(
-        self, query: str, k: int, filter: dict[str, Any] | None
-    ) -> list[tuple[int, float]]:
-        if not self._fts_enabled:
-            raise RuntimeError(
-                "keyword_search requires SQLite compiled with FTS5 support"
-            )
-        if not query.strip():
-            return []
-
-        filter_clause, filter_params = self._build_filter_clause(
-            filter, metadata_column="ti.metadata"
+        return self._search.similarity_search(
+            query, k, filter, filter_builder=self._build_filter_clause
         )
-
-        sql = f"""
-            SELECT ti.id, bm25({self._fts_table_name}) as score
-            FROM {self._fts_table_name} f
-            JOIN {self._table_name} ti ON ti.id = f.rowid
-            WHERE {self._fts_table_name} MATCH ?
-            {filter_clause}
-            ORDER BY score ASC
-            LIMIT ?
-        """
-        params = (query,) + tuple(filter_params) + (k,)
-        rows = self.conn.execute(sql, params).fetchall()
-        return [(int(row[0]), float(row[1])) for row in rows]
 
     def keyword_search(
         self, query: str, k: int = 5, filter: dict[str, Any] | None = None
     ) -> list[tuple[Document, float]]:
-        candidates = self._keyword_search_candidates(query, k, filter)
-        return self._hydrate_documents(candidates)
-
-    def _reciprocal_rank_fusion(
-        self,
-        dense: Sequence[tuple[int, float]],
-        sparse: Sequence[tuple[int, float]],
-        rrf_k: int,
-    ) -> list[tuple[int, float]]:
-        rank_scores: dict[int, float] = {}
-
-        def _accumulate(items: Sequence[tuple[int, float]]):
-            for rank, (doc_id, _) in enumerate(items):
-                rank_scores[doc_id] = rank_scores.get(doc_id, 0.0) + 1.0 / (
-                    rrf_k + rank + 1
-                )
-
-        _accumulate(dense)
-        _accumulate(sparse)
-
-        fused = sorted(rank_scores.items(), key=lambda kv: kv[1], reverse=True)
-        return [(doc_id, score) for doc_id, score in fused]
+        return self._search.keyword_search(
+            query, k, filter, filter_builder=self._build_filter_clause
+        )
 
     def hybrid_search(
         self,
@@ -626,31 +477,16 @@ class VectorCollection:
         keyword_k: int | None = None,
         rrf_k: int = 60,
     ) -> list[tuple[Document, float]]:
-        if not self._fts_enabled:
-            raise RuntimeError(
-                "hybrid_search requires SQLite compiled with FTS5 support"
-            )
-
-        if not query.strip():
-            return []
-
-        dense_k = vector_k or max(k, 10)
-        sparse_k = keyword_k or max(k, 10)
-
-        vector_input: str | Sequence[float]
-        if query_vector is not None:
-            vector_input = query_vector
-        else:
-            vector_input = query
-
-        dense_candidates = self._vector_search_candidates(vector_input, dense_k, filter)
-        sparse_candidates = self._keyword_search_candidates(query, sparse_k, filter)
-
-        fused_candidates = self._reciprocal_rank_fusion(
-            dense_candidates, sparse_candidates, rrf_k
+        return self._search.hybrid_search(
+            query,
+            k,
+            filter,
+            query_vector=query_vector,
+            vector_k=vector_k,
+            keyword_k=keyword_k,
+            rrf_k=rrf_k,
+            filter_builder=self._build_filter_clause,
         )
-
-        return self._hydrate_documents(fused_candidates[:k])
 
     def max_marginal_relevance_search(
         self,
@@ -659,38 +495,9 @@ class VectorCollection:
         fetch_k: int = 20,
         filter: dict[str, Any] | None = None,
     ) -> list[Document]:
-        candidates_with_scores = self.similarity_search(query, k=fetch_k, filter=filter)
-        candidates = [doc for doc, _ in candidates_with_scores]
-
-        if len(candidates) <= k:
-            return candidates
-
-        selected = []
-        unselected = candidates.copy()
-        selected.append(unselected.pop(0))
-
-        while len(selected) < k:
-            mmr_scores = []
-            for candidate in unselected:
-                relevance = next(
-                    score for doc, score in candidates_with_scores if doc == candidate
-                )
-                diversity = min(
-                    next(
-                        score
-                        for doc, score in candidates_with_scores
-                        if doc == selected_doc
-                    )
-                    for selected_doc in selected
-                )
-                mmr_score = 0.5 * relevance - 0.5 * diversity
-                mmr_scores.append((mmr_score, candidate))
-
-            mmr_scores.sort(key=lambda x: x[0], reverse=True)
-            selected.append(mmr_scores[0][1])
-            unselected.remove(mmr_scores[0][1])
-
-        return selected
+        return self._search.max_marginal_relevance_search(
+            query, k, fetch_k, filter, filter_builder=self._build_filter_clause
+        )
 
     def _brute_force_search(
         self,
@@ -698,71 +505,9 @@ class VectorCollection:
         k: int,
         filter: dict[str, Any] | None,
     ) -> list[tuple[int, float]]:
-        batch_size = get_optimal_batch_size()
-
-        try:
-            cursor = self.conn.execute(
-                f"SELECT rowid, embedding FROM {self._vec_table_name}"
-            )
-        except sqlite3.OperationalError:
-            return []
-
-        top_k_candidates: list[tuple[int, float]] = []
-
-        for batch in _batched(cursor, batch_size):
-            if not batch:
-                continue
-
-            ids, blobs = zip(*batch)
-
-            metas = []
-            if filter:
-                placeholders = ",".join("?" for _ in ids)
-                meta_rows = self.conn.execute(
-                    f"SELECT id, metadata FROM {self._table_name} WHERE id IN ({placeholders})",
-                    ids,
-                ).fetchall()
-                meta_map = {r[0]: r[1] for r in meta_rows}
-                metas = [meta_map.get(i) for i in ids]
-            else:
-                metas = [None] * len(ids)
-
-            vectors = np.array(
-                [_dequantize_vector(b, self._dim, self.quantization) for b in blobs]
-            )
-
-            if self.distance_strategy == DistanceStrategy.COSINE:
-                dots = np.dot(vectors, query_vec)
-                norms = np.linalg.norm(vectors, axis=1)
-                similarities = dots / (norms * np.linalg.norm(query_vec) + 1e-12)
-                distances = 1 - similarities
-            elif self.distance_strategy == DistanceStrategy.L2:
-                distances = np.linalg.norm(vectors - query_vec, axis=1)
-            elif self.distance_strategy == DistanceStrategy.L1:
-                distances = np.sum(np.abs(vectors - query_vec), axis=1)
-            else:
-                raise ValueError(
-                    f"Unsupported distance strategy: {self.distance_strategy}"
-                )
-
-            batch_candidates = []
-            for _, (cid, dist, meta_json) in enumerate(zip(ids, distances, metas)):
-                if filter:
-                    meta = json.loads(meta_json) if meta_json else {}
-                    if not all(
-                        meta.get(k) == v
-                        if not isinstance(v, list)
-                        else meta.get(k) in v
-                        for k, v in filter.items()
-                    ):
-                        continue
-                batch_candidates.append((int(cid), float(dist)))
-
-            top_k_candidates.extend(batch_candidates)
-            top_k_candidates.sort(key=lambda x: x[1])
-            top_k_candidates = top_k_candidates[:k]
-
-        return top_k_candidates
+        return self._search._brute_force_search(
+            query_vec, k, filter, self._build_filter_clause, get_optimal_batch_size()
+        )
 
     def delete_by_ids(self, ids: Iterable[int]) -> None:
         ids = list(ids)
