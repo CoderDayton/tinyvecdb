@@ -165,7 +165,7 @@ store = SimpleVecDBLlamaStore(
 )
 ```
 
-See **[Examples](https://coderdayton.github.io/simplevecdb/examples/)** for complete RAG workflows with Ollama.
+See **[Examples](https://coderdayton.github.io/SimpleVecDB/examples/)** for complete RAG workflows with Ollama.
 
 ## Core Features
 
@@ -243,10 +243,10 @@ results = collection.similarity_search(
 
 ## Documentation
 
-- **[Setup Guide](https://coderdayton.github.io/simplevecdb/ENV_SETUP)** — Environment variables, server configuration, authentication
-- **[API Reference](https://coderdayton.github.io/simplevecdb/api/core)** — Complete class/method documentation with type signatures
-- **[Benchmarks](https://coderdayton.github.io/simplevecdb/benchmarks)** — Quantization strategies, batch sizes, hardware optimization
-- **[Integration Examples](https://coderdayton.github.io/simplevecdb/examples)** — RAG notebooks, Ollama workflows, production patterns
+- **[Setup Guide](https://coderdayton.github.io/SimpleVecDB/ENV_SETUP)** — Environment variables, server configuration, authentication
+- **[API Reference](https://coderdayton.github.io/SimpleVecDB/api/core)** — Complete class/method documentation with type signatures
+- **[Benchmarks](https://coderdayton.github.io/SimpleVecDB/benchmarks)** — Quantization strategies, batch sizes, hardware optimization
+- **[Integration Examples](https://coderdayton.github.io/SimpleVecDB/examples)** — RAG notebooks, Ollama workflows, production patterns
 - **[Contributing Guide](CONTRIBUTING.md)** — Development setup, testing, PR guidelines
 
 ## Troubleshooting
@@ -301,19 +301,17 @@ Contributions are welcome! Whether you're fixing bugs, improving documentation, 
 2. Check existing [Issues](https://github.com/coderdayton/simplevecdb/issues) and [Discussions](https://github.com/coderdayton/simplevecdb/discussions)
 3. Open a PR with clear description and tests
 
-**Need help?** Join the conversation in [GitHub Discussions](https://github.com/coderdayton/simplevecdb/discussions).
-
 ## Community & Support
 
 **Get Help:**
 
-- [GitHub Discussions](https://github.com/coderdayton/simplevecdb/discussions) — Q\&A and feature requests
+- [GitHub Discussions](https://github.com/coderdayton/simplevecdb/discussions) — Q&A and feature requests
 - [GitHub Issues](https://github.com/coderdayton/simplevecdb/issues) — Bug reports
 
 **Stay Updated:**
 
 - [GitHub Releases](https://github.com/coderdayton/simplevecdb/releases) — Changelog and updates
-- [Examples Gallery](https://coderdayton.github.io/simplevecdb/examples/) — Community-contributed notebooks
+- [Examples Gallery](https://coderdayton.github.io/SimpleVecDB/examples/) — Community-contributed notebooks
 
 ## Sponsors
 
