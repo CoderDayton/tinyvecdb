@@ -301,8 +301,6 @@ Contributions are welcome! Whether you're fixing bugs, improving documentation, 
 2. Check existing [Issues](https://github.com/coderdayton/simplevecdb/issues) and [Discussions](https://github.com/coderdayton/simplevecdb/discussions)
 3. Open a PR with clear description and tests
 
-**Need help?** Join the conversation in [GitHub Discussions](https://github.com/coderdayton/simplevecdb/discussions).
-
 ## Community & Support
 
 **Get Help:**
