@@ -37,7 +37,7 @@ tinyvecdb/
 │   └── integrations/
 │       ├── langchain.py     # LangChain VectorStore wrapper
 │       └── llamaindex.py    # LlamaIndex VectorStore wrapper
-├── tests/                   # Unitm integration and performance tests
+├── tests/                   # Unit, integration and performance tests
 ├── examples/                # RAG notebooks, demos
 └── docs/                    # Documentation
 ```

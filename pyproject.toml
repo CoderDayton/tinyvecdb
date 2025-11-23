@@ -1,6 +1,6 @@
 [project]
 name = "tinyvecdb"
-version = "0.1.0"
+version = "1.0.0"
 description = "Dead-simple local vector database powered by sqlite-vec."
 authors = [{ name = "Dayton Dunbar", email = "coderdayton14@gmail.com" }]
 license = { text = "MIT" }

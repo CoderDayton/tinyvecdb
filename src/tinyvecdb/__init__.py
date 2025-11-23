@@ -6,7 +6,7 @@ from .config import config
 from .integrations.langchain import TinyVecDBVectorStore
 from .integrations.llamaindex import TinyVecDBLlamaStore
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __all__ = [
     "VectorDB",
     "Quantization",
