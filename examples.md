@@ -2,20 +2,20 @@
 
 ## RAG with LangChain
 
-[View Notebook](https://github.com/coderdayton/tinyvecdb/blob/main/examples/rag/langchain_rag.ipynb)
+[View Notebook](https://github.com/coderdayton/simplevecdb/blob/main/examples/rag/langchain_rag.ipynb)
 
 ## RAG with LlamaIndex
 
-[View Notebook](https://github.com/coderdayton/tinyvecdb/blob/main/examples/rag/llama_rag.ipynb)
+[View Notebook](https://github.com/coderdayton/simplevecdb/blob/main/examples/rag/llama_rag.ipynb)
 
 ## RAG with Ollama LLM
 
-[View Notebook](https://github.com/coderdayton/tinyvecdb/blob/main/examples/rag/ollama_rag.ipynb)
+[View Notebook](https://github.com/coderdayton/simplevecdb/blob/main/examples/rag/ollama_rag.ipynb)
 
 ## Keyword & Hybrid Search (SQLite-only)
 
 ```python
-from tinyvecdb import VectorDB
+from simplevecdb import VectorDB
 
 db = VectorDB("local.db")
 collection = db.collection("default")

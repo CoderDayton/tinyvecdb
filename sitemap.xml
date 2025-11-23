@@ -1,43 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://coderdayton.github.io/tinyvecdb/</loc>
+         <loc>https://coderdayton.github.io/simplevecdb/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
     <url>
-         <loc>https://coderdayton.github.io/tinyvecdb/CHANGELOG/</loc>
+         <loc>https://coderdayton.github.io/simplevecdb/CHANGELOG/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
     <url>
-         <loc>https://coderdayton.github.io/tinyvecdb/CONTRIBUTING/</loc>
+         <loc>https://coderdayton.github.io/simplevecdb/CONTRIBUTING/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
     <url>
-         <loc>https://coderdayton.github.io/tinyvecdb/ENV_SETUP/</loc>
+         <loc>https://coderdayton.github.io/simplevecdb/ENV_SETUP/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
     <url>
-         <loc>https://coderdayton.github.io/tinyvecdb/benchmarks/</loc>
+         <loc>https://coderdayton.github.io/simplevecdb/benchmarks/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
     <url>
-         <loc>https://coderdayton.github.io/tinyvecdb/examples/</loc>
+         <loc>https://coderdayton.github.io/simplevecdb/examples/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
     <url>
-         <loc>https://coderdayton.github.io/tinyvecdb/api/config/</loc>
+         <loc>https://coderdayton.github.io/simplevecdb/api/config/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
     <url>
-         <loc>https://coderdayton.github.io/tinyvecdb/api/core/</loc>
+         <loc>https://coderdayton.github.io/simplevecdb/api/core/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
     <url>
-         <loc>https://coderdayton.github.io/tinyvecdb/api/embeddings/</loc>
+         <loc>https://coderdayton.github.io/simplevecdb/api/embeddings/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
     <url>
-         <loc>https://coderdayton.github.io/tinyvecdb/api/integrations/</loc>
+         <loc>https://coderdayton.github.io/simplevecdb/api/integrations/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
 </urlset>

@@ -1,3 +1,3 @@
 # Configuration API
 
-::: tinyvecdb.config
+::: simplevecdb.config

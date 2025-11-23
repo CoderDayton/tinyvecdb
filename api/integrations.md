@@ -2,8 +2,8 @@
 
 ## LangChain
 
-::: tinyvecdb.integrations.langchain.TinyVecDBVectorStore
+::: simplevecdb.integrations.langchain.SimpleVecDBVectorStore
 
 ## LlamaIndex
 
-::: tinyvecdb.integrations.llamaindex.TinyVecDBLlamaStore
+::: simplevecdb.integrations.llamaindex.SimpleVecDBLlamaStore

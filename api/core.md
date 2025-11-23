@@ -1,5 +1,5 @@
 # Core API
 
-::: tinyvecdb.core.VectorDB
+::: simplevecdb.core.VectorDB
 
-::: tinyvecdb.core.VectorCollection
+::: simplevecdb.core.VectorCollection

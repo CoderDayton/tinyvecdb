@@ -1,5 +1,5 @@
 # Embeddings API
 
-::: tinyvecdb.embeddings.models
+::: simplevecdb.embeddings.models
 
-::: tinyvecdb.embeddings.server
+::: simplevecdb.embeddings.server

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to TinyVecDB will be documented in this file.
+All notable changes to SimpleVecDB will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🎉 Initial Release
 
-TinyVecDB's first stable release brings production-ready local vector search to a single SQLite file.
+SimpleVecDB's first stable release brings production-ready local vector search to a single SQLite file.
 
 ### Added
 
@@ -52,12 +52,12 @@ TinyVecDB's first stable release brings production-ready local vector search to 
 
 #### Integrations
 
-- **LangChain**: `TinyVecDBVectorStore` with async support and MMR
+- **LangChain**: `SimpleVecDBVectorStore` with async support and MMR
   - `similarity_search`, `similarity_search_with_score`
   - `max_marginal_relevance_search`
   - `keyword_search`, `hybrid_search`
   - `add_texts`, `add_documents`, `delete`
-- **LlamaIndex**: `TinyVecDBLlamaStore` with query mode support
+- **LlamaIndex**: `SimpleVecDBLlamaStore` with query mode support
   - `VectorStoreQueryMode.DEFAULT` (dense vector)
   - `VectorStoreQueryMode.SPARSE` / `TEXT_SEARCH` (BM25)
   - `VectorStoreQueryMode.HYBRID` / `SEMANTIC_HYBRID` (fusion)
@@ -74,7 +74,7 @@ TinyVecDB's first stable release brings production-ready local vector search to 
 ### Configuration
 
 - `EMBEDDING_MODEL`: HuggingFace model ID (default: `Snowflake/snowflake-arctic-embed-xs`)
-- `EMBEDDING_CACHE_DIR`: Model cache directory (default: `~/.cache/tinyvecdb`)
+- `EMBEDDING_CACHE_DIR`: Model cache directory (default: `~/.cache/simplevecdb`)
 - `EMBEDDING_MODEL_REGISTRY`: Comma-separated `alias=repo_id` entries
 - `EMBEDDING_MODEL_REGISTRY_LOCKED`: Enforce registry allowlist (default: `1`)
 - `EMBEDDING_BATCH_SIZE`: Inference batch size (auto-detected if not set)
@@ -116,9 +116,9 @@ Benchmarks on i9-13900K & RTX 4090 with 10k vectors (384-dim):
 
 ## Links
 
-- **GitHub**: https://github.com/coderdayton/tinyvecdb
-- **PyPI**: https://pypi.org/project/tinyvecdb/
-- **Documentation**: https://coderdayton.github.io/tinyvecdb/
+- **GitHub**: https://github.com/coderdayton/simplevecdb
+- **PyPI**: https://pypi.org/project/simplevecdb/
+- **Documentation**: https://coderdayton.github.io/simplevecdb/
 - **License**: MIT
 
-[1.0.0]: https://github.com/coderdayton/tinyvecdb/releases/tag/v1.0.0
+[1.0.0]: https://github.com/coderdayton/simplevecdb/releases/tag/v1.0.0
