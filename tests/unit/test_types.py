@@ -1,4 +1,4 @@
-from tinyvecdb.types import Document, DistanceStrategy
+from simplevecdb.types import Document, DistanceStrategy
 
 
 def test_document_default_metadata_isolated():

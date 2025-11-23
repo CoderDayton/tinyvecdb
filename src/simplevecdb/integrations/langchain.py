@@ -5,11 +5,11 @@ from langchain_core.vectorstores import VectorStore
 from langchain_core.embeddings import Embeddings
 from langchain_core.documents import Document as LangChainDocument
 
-from tinyvecdb.core import VectorDB  # core class
+from simplevecdb.core import VectorDB  # core class
 
 
-class TinyVecDBVectorStore(VectorStore):
-    """LangChain-compatible wrapper for TinyVecDB."""
+class SimpleVecDBVectorStore(VectorStore):
+    """LangChain-compatible wrapper for SimpleVecDB."""
 
     def __init__(
         self,
@@ -31,7 +31,7 @@ class TinyVecDBVectorStore(VectorStore):
         db_path: str = ":memory:",
         collection_name: str = "default",
         **kwargs: Any,
-    ) -> "TinyVecDBVectorStore":
+    ) -> "SimpleVecDBVectorStore":
         """
         Initialize from texts (embeds them automatically).
 
@@ -44,7 +44,7 @@ class TinyVecDBVectorStore(VectorStore):
             **kwargs: Additional arguments for VectorDB.
 
         Returns:
-            Initialized TinyVecDBVectorStore.
+            Initialized SimpleVecDBVectorStore.
         """
         store = cls(
             embedding=embedding,

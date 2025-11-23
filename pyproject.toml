@@ -1,5 +1,5 @@
 [project]
-name = "tinyvecdb"
+name = "simplevecdb"
 version = "1.0.0"
 description = "Dead-simple local vector database powered by sqlite-vec."
 authors = [{ name = "Dayton Dunbar", email = "coderdayton14@gmail.com" }]
@@ -52,7 +52,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-tinyvecdb-server = "tinyvecdb.embeddings.server:run_server"
+simplevecdb-server = "simplevecdb.embeddings.server:run_server"
 
 [tool.pytest.ini_options]
 markers = [

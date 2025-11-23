@@ -2,9 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
-from tinyvecdb.config import config
-from tinyvecdb.embeddings import server
-from tinyvecdb.embeddings.server import UsageMeter, app
+from simplevecdb.config import config
+from simplevecdb.embeddings import server
+from simplevecdb.embeddings.server import UsageMeter, app
 
 client = TestClient(app)
 
@@ -26,7 +26,7 @@ def test_health_check():
 @pytest.mark.integration
 def test_embeddings_endpoint():
     # Mock the embedding model to avoid loading heavy models during tests
-    with patch("tinyvecdb.embeddings.server.embed_texts") as mock_embed:
+    with patch("simplevecdb.embeddings.server.embed_texts") as mock_embed:
         mock_embed.return_value = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
 
         payload = {
@@ -72,7 +72,7 @@ def test_embeddings_invalid_model_rejected():
 
 @pytest.mark.integration
 def test_usage_endpoint_reports_stats():
-    with patch("tinyvecdb.embeddings.server.embed_texts") as mock_embed:
+    with patch("simplevecdb.embeddings.server.embed_texts") as mock_embed:
         mock_embed.return_value = [[0.1]]
         client.post("/v1/embeddings", json={"input": "hello"})
 
@@ -86,7 +86,7 @@ def test_usage_endpoint_reports_stats():
 @pytest.mark.integration
 def test_run_server():
     """Test run_server function calls uvicorn."""
-    from tinyvecdb.embeddings.server import run_server
+    from simplevecdb.embeddings.server import run_server
 
     with patch("uvicorn.run") as mock_run:
         run_server(host="1.2.3.4", port=9999)

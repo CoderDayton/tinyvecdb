@@ -4667,6 +4667,91 @@ wheels = [
 ]
 
 [[package]]
+name = "simplevecdb"
+version = "1.0.0"
+source = { editable = "." }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "psutil" },
+    { name = "python-dotenv" },
+    { name = "sqlite-vec" },
+]
+
+[package.optional-dependencies]
+examples = [
+    { name = "ollama" },
+]
+server = [
+    { name = "fastapi" },
+    { name = "sentence-transformers", extra = ["onnx"] },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "fastapi" },
+    { name = "jupyterlab" },
+    { name = "langchain-core" },
+    { name = "langchain-openai" },
+    { name = "llama-index" },
+    { name = "llama-index-llms-ollama" },
+    { name = "llama-index-llms-openai-like" },
+    { name = "mkdocs" },
+    { name = "mkdocs-material" },
+    { name = "mkdocs-shadcn" },
+    { name = "mkdocstrings", extra = ["python"] },
+    { name = "mypy" },
+    { name = "onnxruntime" },
+    { name = "pre-commit" },
+    { name = "pymdown-extensions" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+    { name = "sentence-transformers", extra = ["onnx"] },
+    { name = "types-psutil" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
+    { name = "numpy", specifier = ">=2.0" },
+    { name = "ollama", marker = "extra == 'examples'" },
+    { name = "psutil", specifier = ">=5.9.0" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
+    { name = "sentence-transformers", extras = ["onnx"], marker = "extra == 'server'", specifier = "==3.3.1" },
+    { name = "sqlite-vec", specifier = ">=0.1.6" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.30" },
+]
+provides-extras = ["server", "examples"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "jupyterlab" },
+    { name = "langchain-core", specifier = ">=1.0.7" },
+    { name = "langchain-openai", specifier = ">=1.0.3" },
+    { name = "llama-index", specifier = ">=0.14.8" },
+    { name = "llama-index-llms-ollama", specifier = ">=0.9.0" },
+    { name = "llama-index-llms-openai-like", specifier = ">=0.5.3" },
+    { name = "mkdocs", specifier = ">=1.6.1" },
+    { name = "mkdocs-material", specifier = ">=9.7.0" },
+    { name = "mkdocs-shadcn", specifier = ">=0.9.7" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.30.1" },
+    { name = "mypy", specifier = ">=1.0.0" },
+    { name = "onnxruntime", specifier = ">=1.16.0" },
+    { name = "pre-commit", specifier = ">=4.0.0" },
+    { name = "pymdown-extensions", specifier = ">=10.0" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-cov" },
+    { name = "ruff", specifier = ">=0.1.0" },
+    { name = "sentence-transformers", extras = ["onnx"], specifier = "==3.3.1" },
+    { name = "types-psutil", specifier = ">=5.9.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4915,91 +5000,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/7a/fd/7a5ee21fd08ff70d3d33a5781c255cbe779659bd03278feb98b19ee550f4/tinycss2-1.4.0.tar.gz", hash = "sha256:10c0972f6fc0fbee87c3edb76549357415e94548c1ae10ebccdea16fb404a9b7", size = 87085, upload-time = "2024-10-24T14:58:29.895Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e6/34/ebdc18bae6aa14fbee1a08b63c015c72b64868ff7dae68808ab500c492e2/tinycss2-1.4.0-py3-none-any.whl", hash = "sha256:3a49cf47b7675da0b15d0c6e1df8df4ebd96e9394bb905a5775adb0d884c5289", size = 26610, upload-time = "2024-10-24T14:58:28.029Z" },
-]
-
-[[package]]
-name = "tinyvecdb"
-version = "1.0.0"
-source = { editable = "." }
-dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "psutil" },
-    { name = "python-dotenv" },
-    { name = "sqlite-vec" },
-]
-
-[package.optional-dependencies]
-examples = [
-    { name = "ollama" },
-]
-server = [
-    { name = "fastapi" },
-    { name = "sentence-transformers", extra = ["onnx"] },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "fastapi" },
-    { name = "jupyterlab" },
-    { name = "langchain-core" },
-    { name = "langchain-openai" },
-    { name = "llama-index" },
-    { name = "llama-index-llms-ollama" },
-    { name = "llama-index-llms-openai-like" },
-    { name = "mkdocs" },
-    { name = "mkdocs-material" },
-    { name = "mkdocs-shadcn" },
-    { name = "mkdocstrings", extra = ["python"] },
-    { name = "mypy" },
-    { name = "onnxruntime" },
-    { name = "pre-commit" },
-    { name = "pymdown-extensions" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-    { name = "sentence-transformers", extra = ["onnx"] },
-    { name = "types-psutil" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
-    { name = "numpy", specifier = ">=2.0" },
-    { name = "ollama", marker = "extra == 'examples'" },
-    { name = "psutil", specifier = ">=5.9.0" },
-    { name = "python-dotenv", specifier = ">=1.2.1" },
-    { name = "sentence-transformers", extras = ["onnx"], marker = "extra == 'server'", specifier = "==3.3.1" },
-    { name = "sqlite-vec", specifier = ">=0.1.6" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.30" },
-]
-provides-extras = ["server", "examples"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "jupyterlab" },
-    { name = "langchain-core", specifier = ">=1.0.7" },
-    { name = "langchain-openai", specifier = ">=1.0.3" },
-    { name = "llama-index", specifier = ">=0.14.8" },
-    { name = "llama-index-llms-ollama", specifier = ">=0.9.0" },
-    { name = "llama-index-llms-openai-like", specifier = ">=0.5.3" },
-    { name = "mkdocs", specifier = ">=1.6.1" },
-    { name = "mkdocs-material", specifier = ">=9.7.0" },
-    { name = "mkdocs-shadcn", specifier = ">=0.9.7" },
-    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.30.1" },
-    { name = "mypy", specifier = ">=1.0.0" },
-    { name = "onnxruntime", specifier = ">=1.16.0" },
-    { name = "pre-commit", specifier = ">=4.0.0" },
-    { name = "pymdown-extensions", specifier = ">=10.0" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-cov" },
-    { name = "ruff", specifier = ">=0.1.0" },
-    { name = "sentence-transformers", extras = ["onnx"], specifier = "==3.3.1" },
-    { name = "types-psutil", specifier = ">=5.9.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 
 [[package]]

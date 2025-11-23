@@ -1,5 +1,5 @@
 import numpy as np
-from tinyvecdb import VectorDB, Quantization
+from simplevecdb import VectorDB, Quantization
 import os
 import time
 

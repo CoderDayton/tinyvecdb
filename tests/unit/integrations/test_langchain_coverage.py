@@ -9,7 +9,7 @@ import pytest
 
 def test_langchain_delete(tmp_path):
     """Test LangChain integration delete method."""
-    from tinyvecdb.integrations.langchain import TinyVecDBVectorStore
+    from simplevecdb.integrations.langchain import SimpleVecDBVectorStore
 
     db_path = tmp_path / "lc_del.db"
 
@@ -17,7 +17,7 @@ def test_langchain_delete(tmp_path):
     mock_embedding = MagicMock()
     mock_embedding.embed_documents.return_value = [np.random.rand(384).tolist()]
 
-    store = TinyVecDBVectorStore(str(db_path), embedding=mock_embedding)
+    store = SimpleVecDBVectorStore(str(db_path), embedding=mock_embedding)
 
     # Add some dummy data to delete with pre-computed embeddings
     ids = store.add_texts(["text1"])
@@ -29,9 +29,9 @@ def test_langchain_delete(tmp_path):
 
 def test_langchain_similarity_search_requires_embedding(tmp_path):
     """Ensure text queries fail when no embedding model is configured."""
-    from tinyvecdb.integrations.langchain import TinyVecDBVectorStore
+    from simplevecdb.integrations.langchain import SimpleVecDBVectorStore
 
-    store = TinyVecDBVectorStore(str(tmp_path / "lc_no_embed.db"))
+    store = SimpleVecDBVectorStore(str(tmp_path / "lc_no_embed.db"))
 
     with pytest.raises(ValueError):
         store.similarity_search("query")
@@ -39,11 +39,11 @@ def test_langchain_similarity_search_requires_embedding(tmp_path):
 
 def test_langchain_similarity_search_with_score_returns_scores(tmp_path):
     """Validate similarity_search_with_score uses embeddings and returns tuples."""
-    from tinyvecdb.integrations.langchain import TinyVecDBVectorStore
+    from simplevecdb.integrations.langchain import SimpleVecDBVectorStore
 
     mock_embedding = MagicMock()
     mock_embedding.embed_query.return_value = [0.5] * 3
-    store = TinyVecDBVectorStore(
+    store = SimpleVecDBVectorStore(
         str(tmp_path / "lc_with_score.db"), embedding=mock_embedding
     )
 
@@ -64,9 +64,9 @@ def test_langchain_similarity_search_with_score_returns_scores(tmp_path):
 
 def test_langchain_mmr_requires_embedding(tmp_path):
     """MMR search should raise when no embedding model is provided."""
-    from tinyvecdb.integrations.langchain import TinyVecDBVectorStore
+    from simplevecdb.integrations.langchain import SimpleVecDBVectorStore
 
-    store = TinyVecDBVectorStore(str(tmp_path / "lc_mmr_no_embed.db"))
+    store = SimpleVecDBVectorStore(str(tmp_path / "lc_mmr_no_embed.db"))
 
     with pytest.raises(ValueError):
         store.max_marginal_relevance_search("query")

@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from tinyvecdb.core import Quantization, _dequantize_vector, _normalize_l2
+from simplevecdb.core import Quantization, _dequantize_vector, _normalize_l2
 
 
 def test_dequantize_bit_vector():
@@ -34,7 +34,7 @@ def test_normalize_l2_zero_vector():
 
 def test_quantization_storage():
     """Test INT8 quantization storage uses 1 byte per dimension."""
-    from tinyvecdb import VectorDB
+    from simplevecdb import VectorDB
 
     db = VectorDB(":memory:", quantization=Quantization.INT8)
     collection = db.collection("default")

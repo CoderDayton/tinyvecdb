@@ -3,8 +3,8 @@
 from unittest.mock import patch
 import pytest
 
-from tinyvecdb import VectorDB
-from tinyvecdb.core import Quantization
+from simplevecdb import VectorDB
+from simplevecdb.core import Quantization
 
 
 def test_similarity_search_text_query_error():
@@ -16,7 +16,7 @@ def test_similarity_search_text_query_error():
     collection.add_texts(["test"], embeddings=[[0.1, 0.2]])
 
     # Mock embeddings module to be unavailable
-    with patch.dict(sys.modules, {"tinyvecdb.embeddings.models": None}):
+    with patch.dict(sys.modules, {"simplevecdb.embeddings.models": None}):
         # Try text query - should raise ValueError
         with pytest.raises((ValueError, AttributeError)):
             collection.similarity_search("query text", k=1)

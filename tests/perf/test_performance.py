@@ -2,7 +2,7 @@
 import time
 import numpy as np
 import pytest
-from tinyvecdb import VectorDB
+from simplevecdb import VectorDB
 
 N = 10_000  # Reduced from 100k for CI/Dev environment safety
 DIM = 384

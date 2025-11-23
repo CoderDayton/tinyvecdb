@@ -18,8 +18,8 @@ from .utils import _import_optional
 
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
-    from .integrations.langchain import TinyVecDBVectorStore
-    from .integrations.llamaindex import TinyVecDBLlamaStore
+    from .integrations.langchain import SimpleVecDBVectorStore
+    from .integrations.llamaindex import SimpleVecDBLlamaStore
 
 
 class Quantization(StrEnum):
@@ -363,7 +363,7 @@ class VectorCollection:
         embed_func = None
         if embeddings is None:
             try:
-                from tinyvecdb.embeddings.models import embed_texts
+                from simplevecdb.embeddings.models import embed_texts
 
                 embed_func = embed_texts
             except Exception as e:
@@ -371,7 +371,7 @@ class VectorCollection:
                     "No embeddings provided and local embedder failed – install with [server] extra"
                 ) from e
 
-        from tinyvecdb import config
+        from simplevecdb import config
 
         all_ids = []
         n_total = len(texts)
@@ -701,7 +701,9 @@ class VectorCollection:
         batch_size = get_optimal_batch_size()
 
         try:
-            cursor = self.conn.execute(f"SELECT rowid, embedding FROM {self._vec_table_name}")
+            cursor = self.conn.execute(
+                f"SELECT rowid, embedding FROM {self._vec_table_name}"
+            )
         except sqlite3.OperationalError:
             return []
 
@@ -774,7 +776,8 @@ class VectorCollection:
                 params,
             )
             self.conn.execute(
-                f"DELETE FROM {self._vec_table_name} WHERE rowid IN ({placeholders})", params
+                f"DELETE FROM {self._vec_table_name} WHERE rowid IN ({placeholders})",
+                params,
             )
             self._delete_fts_rows(ids)
         self.conn.execute("VACUUM")
@@ -870,7 +873,7 @@ class VectorDB:
     # ------------------------------------------------------------------ #
     def as_langchain(
         self, embeddings: Embeddings | None = None, collection_name: str = "default"
-    ) -> TinyVecDBVectorStore:
+    ) -> SimpleVecDBVectorStore:
         """
         Return a LangChain-compatible vector store interface.
 
@@ -879,15 +882,15 @@ class VectorDB:
             collection_name: Name of the collection to use.
 
         Returns:
-            TinyVecDBVectorStore instance.
+            SimpleVecDBVectorStore instance.
         """
-        from .integrations.langchain import TinyVecDBVectorStore
+        from .integrations.langchain import SimpleVecDBVectorStore
 
-        return TinyVecDBVectorStore(
+        return SimpleVecDBVectorStore(
             db_path=self.path, embedding=embeddings, collection_name=collection_name
         )
 
-    def as_llama_index(self, collection_name: str = "default") -> TinyVecDBLlamaStore:
+    def as_llama_index(self, collection_name: str = "default") -> SimpleVecDBLlamaStore:
         """
         Return a LlamaIndex-compatible vector store interface.
 
@@ -895,11 +898,11 @@ class VectorDB:
             collection_name: Name of the collection to use.
 
         Returns:
-            TinyVecDBLlamaStore instance.
+            SimpleVecDBLlamaStore instance.
         """
-        from .integrations.llamaindex import TinyVecDBLlamaStore
+        from .integrations.llamaindex import SimpleVecDBLlamaStore
 
-        return TinyVecDBLlamaStore(db_path=self.path, collection_name=collection_name)
+        return SimpleVecDBLlamaStore(db_path=self.path, collection_name=collection_name)
 
     # ------------------------------------------------------------------ #
     # Convenience

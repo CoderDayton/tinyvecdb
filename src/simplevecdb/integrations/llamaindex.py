@@ -1,4 +1,4 @@
-# src/tinyvecdb/integrations/llamaindex.py
+# src/simplevecdb/integrations/llamaindex.py
 from typing import Any, TYPE_CHECKING
 from collections.abc import Sequence
 
@@ -13,14 +13,14 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQueryMode,
 )
 
-from tinyvecdb.core import VectorDB  # our core
+from simplevecdb.core import VectorDB  # our core
 
 if TYPE_CHECKING:
-    from tinyvecdb.types import Document
+    from simplevecdb.types import Document
 
 
-class TinyVecDBLlamaStore(BasePydanticVectorStore):
-    """LlamaIndex-compatible wrapper for TinyVecDB."""
+class SimpleVecDBLlamaStore(BasePydanticVectorStore):
+    """LlamaIndex-compatible wrapper for SimpleVecDB."""
 
     stores_text: bool = True
     is_embedding_query: bool = True

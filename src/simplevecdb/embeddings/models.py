@@ -24,7 +24,7 @@ def _load_sentence_transformer_cls() -> type[SentenceTransformerType]:
         from sentence_transformers import SentenceTransformer as cls
     except Exception as exc:  # pragma: no cover - exercised when deps missing
         raise ImportError(
-            "Embeddings support requires the 'tinyvecdb[server]' extra."
+            "Embeddings support requires the 'simplevecdb[server]' extra."
         ) from exc
     return cls
 
@@ -34,7 +34,7 @@ def _load_snapshot_download():
         from huggingface_hub import snapshot_download
     except Exception as exc:  # pragma: no cover - exercised when deps missing
         raise ImportError(
-            "Embeddings support requires the 'tinyvecdb[server]' extra."
+            "Embeddings support requires the 'simplevecdb[server]' extra."
         ) from exc
     return snapshot_download
 

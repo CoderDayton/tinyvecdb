@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch
 import sys
 
-from tinyvecdb import VectorDB
+from simplevecdb import VectorDB
 
 
 def test_recover_dim_no_match(tmp_path):
@@ -54,7 +54,7 @@ def test_add_texts_no_embeddings_no_model():
     collection = db.collection("default")
 
     # Mock the import to fail
-    with patch.dict(sys.modules, {"tinyvecdb.embeddings.models": None}):
+    with patch.dict(sys.modules, {"simplevecdb.embeddings.models": None}):
         with pytest.raises(ValueError, match="No embeddings provided"):
             collection.add_texts(["test"])
 

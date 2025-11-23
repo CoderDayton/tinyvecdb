@@ -1,6 +1,6 @@
 """Tests for config parsing helpers."""
 
-from tinyvecdb.config import _parse_registry, _parse_api_keys, _parse_bool_env
+from simplevecdb.config import _parse_registry, _parse_api_keys, _parse_bool_env
 
 
 def test_parse_registry_empty():

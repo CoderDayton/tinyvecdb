@@ -1,5 +1,5 @@
 """
-Performance Benchmark for TinyVecDB
+Performance Benchmark for SimpleVecDB
 Generates metrics matching the README benchmark table.
 """
 
@@ -7,8 +7,8 @@ import time
 import platform
 import numpy as np
 from pathlib import Path
-from tinyvecdb import VectorDB, Quantization
-from tinyvecdb.config import config as EmbeddingConfig
+from simplevecdb import VectorDB, Quantization
+from simplevecdb.config import config as EmbeddingConfig
 
 
 def format_size_mb(bytes_size: int) -> str:
@@ -115,7 +115,7 @@ def run_benchmarks():
     """Run all benchmark configurations and print results table."""
 
     print("\n" + "=" * 90)
-    print("TinyVecDB Performance Benchmark")
+    print("SimpleVecDB Performance Benchmark")
     print("=" * 90 + "\n")
 
     # Benchmark configurations matching README table

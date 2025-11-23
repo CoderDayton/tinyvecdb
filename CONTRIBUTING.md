@@ -1,6 +1,6 @@
-# Contributing to TinyVecDB
+# Contributing to SimpleVecDB
 
-Thanks for considering a contribution to TinyVecDB; your help steadily improves this local-first vector database.
+Thanks for considering a contribution to SimpleVecDB; your help steadily improves this local-first vector database.
 
 ## Getting Started
 
@@ -13,8 +13,8 @@ Thanks for considering a contribution to TinyVecDB; your help steadily improves 
 ### Local Setup
 
 ```bash
-git clone https://github.com/coderdayton/tinyvecdb.git
-cd tinyvecdb
+git clone https://github.com/coderdayton/simplevecdb.git
+cd simplevecdb
 
 # Install dependencies with development tools
 uv sync
@@ -26,8 +26,8 @@ pip install -e ".[dev]"
 ### Project Structure
 
 ```
-tinyvecdb/
-├── src/tinyvecdb/
+simplevecdb/
+├── src/simplevecdb/
 │   ├── core.py              # Main VectorDB class
 │   ├── types.py             # Document, DistanceStrategy types
 │   ├── config.py            # Configuration management
@@ -51,7 +51,7 @@ tinyvecdb/
 pytest
 
 # With coverage
-pytest --cov=tinyvecdb
+pytest --cov=simplevecdb
 
 # Specific test file
 pytest tests/unit/test_search.py
@@ -131,7 +131,7 @@ def test_similarity_search_with_k():
 
 ## Performance Considerations
 
-- TinyVecDB prioritizes simplicity over maximum performance
+- SimpleVecDB prioritizes simplicity over maximum performance
 - Benchmark large-scale operations (10k+ vectors)
 - Use NumPy efficiently for vector operations
 - Minimize database round-trips
@@ -148,7 +148,7 @@ logging.basicConfig(level=logging.DEBUG)
 Run the embedding server locally for testing:
 
 ```bash
-tinyvecdb-server
+simplevecdb-server
 # Server runs at http://localhost:53287 by default
 ```
 
@@ -171,4 +171,4 @@ tinyvecdb-server
 
 ---
 
-**Thank you for contributing!** Every bit helps make TinyVecDB better for everyone. 🚀
+**Thank you for contributing!** Every bit helps make SimpleVecDB better for everyone. 🚀

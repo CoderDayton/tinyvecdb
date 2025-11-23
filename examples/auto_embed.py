@@ -1,4 +1,4 @@
-from tinyvecdb import VectorDB
+from simplevecdb import VectorDB
 
 db = VectorDB(":memory:")
 collection = db.collection("default")

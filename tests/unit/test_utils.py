@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from types import ModuleType
 
-from tinyvecdb.utils import _import_optional
+from simplevecdb.utils import _import_optional
 
 
 def test_import_optional_returns_existing_module(monkeypatch):

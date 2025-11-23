@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from tinyvecdb import VectorDB
-from tinyvecdb.types import DistanceStrategy
+from simplevecdb import VectorDB
+from simplevecdb.types import DistanceStrategy
 
 
 def test_brute_force_search_operational_error(tmp_path):

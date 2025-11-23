@@ -3,7 +3,7 @@
 import sqlite3
 from unittest.mock import patch
 
-from tinyvecdb import VectorDB
+from simplevecdb import VectorDB
 
 
 def test_as_langchain_factory(tmp_path):

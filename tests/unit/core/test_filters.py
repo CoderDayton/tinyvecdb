@@ -2,7 +2,7 @@
 
 import pytest
 
-from tinyvecdb import VectorDB
+from simplevecdb import VectorDB
 
 
 def test_build_filter_clause_like():

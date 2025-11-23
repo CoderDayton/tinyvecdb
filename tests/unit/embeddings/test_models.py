@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 
-from tinyvecdb.embeddings.models import (
+from simplevecdb.embeddings.models import (
     _load_sentence_transformer_cls,
     _load_snapshot_download,
     load_model,
@@ -31,7 +31,7 @@ def test_load_sentence_transformer_cls_missing_dep():
                 _load_sentence_transformer_cls()
                 assert False, "Should raise ImportError"
             except ImportError as e:
-                assert "tinyvecdb[server]" in str(e)
+                assert "simplevecdb[server]" in str(e)
 
 
 def test_load_snapshot_download():
@@ -52,7 +52,7 @@ def test_load_snapshot_download_missing_dep():
                 _load_snapshot_download()
                 assert False, "Should raise ImportError"
             except ImportError as e:
-                assert "tinyvecdb[server]" in str(e)
+                assert "simplevecdb[server]" in str(e)
 
 
 def test_load_model():
@@ -62,14 +62,14 @@ def test_load_model():
     mock_snapshot = MagicMock(return_value="/cache/model-path")
 
     with patch(
-        "tinyvecdb.embeddings.models._load_sentence_transformer_cls",
+        "simplevecdb.embeddings.models._load_sentence_transformer_cls",
         return_value=mock_st_cls,
     ):
         with patch(
-            "tinyvecdb.embeddings.models._load_snapshot_download",
+            "simplevecdb.embeddings.models._load_snapshot_download",
             return_value=mock_snapshot,
         ):
-            with patch("tinyvecdb.embeddings.models.CACHE_DIR", Path("/tmp/cache")):
+            with patch("simplevecdb.embeddings.models.CACHE_DIR", Path("/tmp/cache")):
                 result = load_model("test/model")
 
     assert result is mock_model
@@ -89,7 +89,7 @@ def test_get_embedder_caches_models():
     mock_model = MagicMock()
 
     with patch(
-        "tinyvecdb.embeddings.models.load_model", return_value=mock_model
+        "simplevecdb.embeddings.models.load_model", return_value=mock_model
     ) as mock_load:
         # First call loads
         result1 = get_embedder("test/model")
@@ -109,8 +109,8 @@ def test_get_embedder_uses_default():
     _loaded_models.clear()
     mock_model = MagicMock()
 
-    with patch("tinyvecdb.embeddings.models.load_model", return_value=mock_model):
-        with patch("tinyvecdb.embeddings.models.DEFAULT_MODEL", "default/model"):
+    with patch("simplevecdb.embeddings.models.load_model", return_value=mock_model):
+        with patch("simplevecdb.embeddings.models.DEFAULT_MODEL", "default/model"):
             result = get_embedder(None)
 
     assert result is mock_model
@@ -130,8 +130,8 @@ def test_embed_texts_calls_model():
     mock_embeddings.tolist.return_value = [[0.1, 0.2], [0.3, 0.4]]
     mock_model.encode.return_value = mock_embeddings
 
-    with patch("tinyvecdb.embeddings.models.get_embedder", return_value=mock_model):
-        with patch("tinyvecdb.embeddings.models.config") as mock_config:
+    with patch("simplevecdb.embeddings.models.get_embedder", return_value=mock_model):
+        with patch("simplevecdb.embeddings.models.config") as mock_config:
             mock_config.EMBEDDING_BATCH_SIZE = 32
             result = embed_texts(["hello", "world"], model_id="test/model")
 
@@ -151,7 +151,7 @@ def test_embed_texts_batch_size_override():
     mock_embeddings.tolist.return_value = [[0.1]]
     mock_model.encode.return_value = mock_embeddings
 
-    with patch("tinyvecdb.embeddings.models.get_embedder", return_value=mock_model):
+    with patch("simplevecdb.embeddings.models.get_embedder", return_value=mock_model):
         embed_texts(["test"], batch_size=128)
 
     assert mock_model.encode.call_args.kwargs["batch_size"] == 128
@@ -166,9 +166,9 @@ def test_embed_texts_uses_default_model():
     mock_model.encode.return_value = mock_embeddings
 
     with patch(
-        "tinyvecdb.embeddings.models.get_embedder", return_value=mock_model
+        "simplevecdb.embeddings.models.get_embedder", return_value=mock_model
     ) as mock_get:
-        with patch("tinyvecdb.embeddings.models.DEFAULT_MODEL", "default/model"):
+        with patch("simplevecdb.embeddings.models.DEFAULT_MODEL", "default/model"):
             embed_texts(["test"])
 
     mock_get.assert_called_once_with(None)

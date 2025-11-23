@@ -1,17 +1,17 @@
-# TinyVecDB
+# SimpleVecDB
 
-[![CI](https://github.com/coderdayton/tinyvecdb/actions/workflows/ci.yml/badge.svg)](https://github.com/coderdayton/tinyvecdb/actions)
-[![PyPI](https://img.shields.io/pypi/v/tinyvecdb?color=blue)](https://pypi.org/project/tinyvecdb/)
-[![License: MIT](https://img.shields.io/github/license/coderdayton/tinyvecdb)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/coderdayton/tinyvecdb?style=social)](https://github.com/coderdayton/tinyvecdb)
+[![CI](https://github.com/coderdayton/simplevecdb/actions/workflows/ci.yml/badge.svg)](https://github.com/coderdayton/simplevecdb/actions)
+[![PyPI](https://img.shields.io/pypi/v/simplevecdb?color=blue)](https://pypi.org/project/simplevecdb/)
+[![License: MIT](https://img.shields.io/github/license/coderdayton/simplevecdb)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/coderdayton/simplevecdb?style=social)](https://github.com/coderdayton/simplevecdb)
 
 **The dead-simple, local-first vector database.**
 
-TinyVecDB brings **Chroma-like simplicity** to a single **SQLite file**. Built on `sqlite-vec`, it offers high-performance vector search, quantization, and zero infrastructure headaches. Perfect for local RAG, offline agents, and indie hackers who need production-grade vector search without the operational overhead.
+SimpleVecDB brings **Chroma-like simplicity** to a single **SQLite file**. Built on `sqlite-vec`, it offers high-performance vector search, quantization, and zero infrastructure headaches. Perfect for local RAG, offline agents, and indie hackers who need production-grade vector search without the operational overhead.
 
 ---
 
-## Why TinyVecDB?
+## Why SimpleVecDB?
 
 - **Zero Infrastructure** — Just a `.db` file. No Docker, no Redis, no cloud bills.
 - **Blazing Fast** — ~2ms queries on consumer hardware with 32x storage efficiency via quantization.
@@ -19,15 +19,15 @@ TinyVecDB brings **Chroma-like simplicity** to a single **SQLite file**. Built o
 - **Batteries Included** — Optional FastAPI embeddings server + LangChain/LlamaIndex integrations.
 - **Production Ready** — Hybrid search (BM25 + vector), metadata filtering, multi-collection support, and automatic hardware acceleration.
 
-### When to Choose TinyVecDB
+### When to Choose SimpleVecDB
 
-| Use Case                       | TinyVecDB             | Cloud Vector DB          |
-| :----------------------------- | :-------------------- | :----------------------- |
+| Use Case                       | SimpleVecDB             | Cloud Vector DB         |
+| :----------------------------- | :-------------------- | :-----------------------  |
 | **Local RAG applications**     | ✅ Perfect fit        | ❌ Overkill + latency    |
 | **Offline-first agents**       | ✅ No internet needed | ❌ Requires connectivity |
-| **Prototyping \& MVPs**        | ✅ Zero config        | ⚠️ Setup overhead        |
+| **Prototyping & MVPs**         | ✅ Zero config        | ⚠️ Setup overhead        |
 | **Multi-tenant SaaS at scale** | ⚠️ Consider sharding  | ✅ Built for this        |
-| **Budget-conscious projects**  | ✅ \$0/month          | ❌ \$50-500+/month       |
+| **Budget-conscious projects**  | ✅ $0/month           | ❌ $50-500+/month        |
 
 ---
 
@@ -52,30 +52,30 @@ TinyVecDB brings **Chroma-like simplicity** to a single **SQLite file**. Built o
 
 ```bash
 # Core library only (lightweight, 50MB)
-pip install tinyvecdb
+pip install simplevecdb
 
 # With local embeddings server + HuggingFace models (500MB+)
-pip install "tinyvecdb[server]"
+pip install "simplevecdb[server]"
 ```
 
 **Verify Installation:**
 
 ```bash
-python -c "from tinyvecdb import VectorDB; print('TinyVecDB installed successfully!')"
+python -c "from simplevecdb import VectorDB; print('SimpleVecDB installed successfully!')"
 ```
 
 ---
 
 ## Quickstart
 
-TinyVecDB is **just a vector storage layer**—it doesn't include an LLM or generate embeddings. This design keeps it lightweight and flexible. Choose your integration path:
+SimpleVecDB is **just a vector storage layer**—it doesn't include an LLM or generate embeddings. This design keeps it lightweight and flexible. Choose your integration path:
 
 ### Option 1: With OpenAI (Simplest)
 
 Best for: Quick prototypes, production apps with OpenAI subscriptions.
 
 ```python
-from tinyvecdb import VectorDB
+from simplevecdb import VectorDB
 from openai import OpenAI
 
 # Initialize database
@@ -133,12 +133,12 @@ print(f"Geography results: {len(geo_results)}")
 Best for: Offline apps, sensitive data, zero API costs.
 
 ```bash
-pip install "tinyvecdb[server]"
+pip install "simplevecdb[server]"
 ```
 
 ```python
-from tinyvecdb import VectorDB
-from tinyvecdb.embeddings.models import embed_texts
+from simplevecdb import VectorDB
+from simplevecdb.embeddings.models import embed_texts
 
 db = VectorDB("local.db")
 collection = db.collection("local_docs")
@@ -173,7 +173,7 @@ for doc, score in hybrid_results:
 Run an OpenAI-compatible API endpoint locally:
 
 ```bash
-tinyvecdb-server --port 8000
+simplevecdb-server --port 8000
 # Use http://localhost:8000/v1/embeddings with any OpenAI SDK
 ```
 
@@ -186,12 +186,12 @@ See the [Setup Guide](ENV_SETUP.md) for advanced configuration: model registry l
 Best for: Existing RAG pipelines, framework-based workflows.
 
 ```python
-from tinyvecdb.integrations.langchain import TinyVecDBVectorStore
+from simplevecdb.integrations.langchain import SimpleVecDBVectorStore
 from langchain_openai import OpenAIEmbeddings
 
 # Use any LangChain embedding model
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-store = TinyVecDBVectorStore(
+store = SimpleVecDBVectorStore(
     db_path="langchain.db",
     embedding=embeddings
 )
@@ -208,15 +208,15 @@ hybrid_results = store.hybrid_search("France capital", k=3)
 **For LlamaIndex:**
 
 ```python
-from tinyvecdb.integrations.llamaindex import TinyVecDBVectorStore
+from simplevecdb.integrations.llamaindex import SimpleVecDBVectorStore
 from llama_index.embeddings.openai import OpenAIEmbedding
 
 embedding = OpenAIEmbedding(model="text-embedding-3-small")
-store = TinyVecDBVectorStore(db_path="llamaindex.db", embedding=embedding)
+store = SimpleVecDBVectorStore(db_path="llamaindex.db", embedding=embedding)
 # Use with LlamaIndex's VectorStoreIndex
 ```
 
-See complete RAG workflows with Ollama, LangChain, and LlamaIndex in the **[Examples](https://coderdayton.github.io/tinyvecdb/examples/)** page.
+See complete RAG workflows with Ollama, LangChain, and LlamaIndex in the **[Examples](https://coderdayton.github.io/simplevecdb/examples/)** page.
 
 ---
 
@@ -227,7 +227,7 @@ See complete RAG workflows with Ollama, LangChain, and LlamaIndex in the **[Exam
 Organize vectors by domain within a single database file:
 
 ```python
-from tinyvecdb import VectorDB, Quantization
+from simplevecdb import VectorDB, Quantization
 
 db = VectorDB("multi_tenant.db")
 
@@ -336,10 +336,10 @@ See detailed benchmarks across different hardware configurations in the **[Bench
 
 ## Documentation
 
-- **[Setup Guide](https://coderdayton.github.io/tinyvecdb/ENV_SETUP)** — Environment variables, server configuration, authentication
-- **[API Reference](https://coderdayton.github.io/tinyvecdb/api/core)** — Complete class/method documentation with type signatures
-- **[Benchmarks](https://coderdayton.github.io/tinyvecdb/benchmarks)** — Quantization strategies, batch sizes, hardware optimization
-- **[Integration Examples](https://coderdayton.github.io/tinyvecdb/examples)** — RAG notebooks, Ollama workflows, production patterns
+- **[Setup Guide](https://coderdayton.github.io/simplevecdb/ENV_SETUP)** — Environment variables, server configuration, authentication
+- **[API Reference](https://coderdayton.github.io/simplevecdb/api/core)** — Complete class/method documentation with type signatures
+- **[Benchmarks](https://coderdayton.github.io/simplevecdb/benchmarks)** — Quantization strategies, batch sizes, hardware optimization
+- **[Integration Examples](https://coderdayton.github.io/simplevecdb/examples)** — RAG notebooks, Ollama workflows, production patterns
 - **[Contributing Guide](CONTRIBUTING.md)** — Development setup, testing, PR guidelines
 
 ---
@@ -386,33 +386,33 @@ pip install torch --index-url https://download.pytorch.org/whl/cu118
 - [ ] Streaming insert API for large-scale ingestion
 - [ ] Graph-based metadata relationships
 
-Vote on features or propose new ones in [GitHub Discussions](https://github.com/coderdayton/tinyvecdb/discussions).
+Vote on features or propose new ones in [GitHub Discussions](https://github.com/coderdayton/simplevecdb/discussions).
 
 ## Contributing
 
 Contributions are welcome! Whether you're fixing bugs, improving documentation, or proposing new features:
 
 1. Read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup
-2. Check existing [Issues](https://github.com/coderdayton/tinyvecdb/issues) and [Discussions](https://github.com/coderdayton/tinyvecdb/discussions)
+2. Check existing [Issues](https://github.com/coderdayton/simplevecdb/issues) and [Discussions](https://github.com/coderdayton/simplevecdb/discussions)
 3. Open a PR with clear description and tests
 
-**Need help?** Join the conversation in [GitHub Discussions](https://github.com/coderdayton/tinyvecdb/discussions).
+**Need help?** Join the conversation in [GitHub Discussions](https://github.com/coderdayton/simplevecdb/discussions).
 
 ## Community & Support
 
 **Get Help:**
 
-- [GitHub Discussions](https://github.com/coderdayton/tinyvecdb/discussions) — Q\&A and feature requests
-- [GitHub Issues](https://github.com/coderdayton/tinyvecdb/issues) — Bug reports
+- [GitHub Discussions](https://github.com/coderdayton/simplevecdb/discussions) — Q\&A and feature requests
+- [GitHub Issues](https://github.com/coderdayton/simplevecdb/issues) — Bug reports
 
 **Stay Updated:**
 
-- [GitHub Releases](https://github.com/coderdayton/tinyvecdb/releases) — Changelog and updates
-- [Examples Gallery](https://coderdayton.github.io/tinyvecdb/examples/) — Community-contributed notebooks
+- [GitHub Releases](https://github.com/coderdayton/simplevecdb/releases) — Changelog and updates
+- [Examples Gallery](https://coderdayton.github.io/simplevecdb/examples/) — Community-contributed notebooks
 
 ## Sponsors
 
-TinyVecDB is an independent open-source project. If it's useful to you, consider supporting its development:
+SimpleVecDB is an independent open-source project. If it's useful to you, consider supporting its development:
 
 **Company Sponsors**
 _Become the first company sponsor!_ [Support on GitHub →](https://github.com/sponsors/coderdayton)
@@ -425,7 +425,7 @@ _Join the list of supporters!_ [Support on GitHub →](https://github.com/sponso
 ## Other Ways to Support
 
 - ☕ [Buy me a coffee](https://www.buymeacoffee.com/coderdayton) (one-time donation)
-- 💎 [Get the Pro Pack](https://tinyvecdb.lemonsqueezy.com/) — Deployment templates \& production recipes (coming soon)
+- 💎 [Get the Pro Pack](https://simplevecdb.lemonsqueezy.com/) — Deployment templates \& production recipes (coming soon)
 - 💖 [GitHub Sponsors](https://github.com/sponsors/coderdayton) (monthly support)
 
 ## License

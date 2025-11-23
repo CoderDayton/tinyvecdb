@@ -11,10 +11,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from .models import DEFAULT_MODEL, embed_texts
-from tinyvecdb.config import config
+from simplevecdb.config import config
 
 app = FastAPI(
-    title="TinyVecDB Embeddings",
+    title="SimpleVecDB Embeddings",
     description="OpenAI-compatible /v1/embeddings endpoint – 100% local",
     version="0.0.1",
     openapi_url="/openapi.json",
@@ -69,7 +69,7 @@ class ModelRegistry:
                     "id": alias,
                     "object": "model",
                     "created": 0,
-                    "owned_by": "tinyvecdb",
+                    "owned_by": "simplevecdb",
                     "metadata": {"repo_id": repo},
                 }
             )
@@ -82,7 +82,7 @@ class ModelRegistry:
                     "id": repo,
                     "object": "model",
                     "created": 0,
-                    "owned_by": "tinyvecdb",
+                    "owned_by": "simplevecdb",
                     "metadata": {"repo_id": repo},
                 }
             )
@@ -243,22 +243,22 @@ async def usage(api_identity: str = Depends(authenticate_request)) -> dict[str, 
 def run_server(host: str | None = None, port: int | None = None) -> None:
     """Run the embedding server.
 
-    Can be called programmatically or via the ``tinyvecdb-server`` CLI.
+    Can be called programmatically or via the ``simplevecdb-server`` CLI.
 
     Examples
     --------
     Run with default settings:
-    $ tinyvecdb-server
+    $ simplevecdb-server
 
     Override port:
-    $ tinyvecdb-server --port 8000
+    $ simplevecdb-server --port 8000
 
     Args:
         host: Server host (defaults to config.SERVER_HOST).
         port: Server port (defaults to config.SERVER_PORT).
     """
     # Minimal CLI-style override when invoked as a script/entry point
-    # Allows commands like: tinyvecdb-server --host 0.0.0.0 --port 8000
+    # Allows commands like: simplevecdb-server --host 0.0.0.0 --port 8000
     import sys
 
     argv = sys.argv[1:]

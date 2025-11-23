@@ -1,6 +1,6 @@
 
 import pytest
-from tinyvecdb import VectorDB, Quantization
+from simplevecdb import VectorDB, Quantization
 
 def test_multi_collection_basic():
     db = VectorDB(":memory:")

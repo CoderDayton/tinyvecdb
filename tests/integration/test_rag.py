@@ -8,7 +8,7 @@ try:
 except ImportError:
     OllamaClient = Mock()  # type: ignore
 
-from tinyvecdb import VectorDB
+from simplevecdb import VectorDB
 
 
 @pytest.mark.integration
@@ -20,7 +20,7 @@ def test_rag_end_to_end(populated_db: VectorDB, monkeypatch):
     import sys
     mock_module = Mock()
     mock_module.embed_texts = mock_embed
-    monkeypatch.setitem(sys.modules, "tinyvecdb.embeddings.models", mock_module)
+    monkeypatch.setitem(sys.modules, "simplevecdb.embeddings.models", mock_module)
 
     # Mock LLM response
     def mock_generate(prompt) -> dict[str, str]:

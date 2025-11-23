@@ -6,7 +6,7 @@ import multiprocessing
 
 def test_batch_size_detection(capsys):
     """Test that batch size detection runs and produces valid output."""
-    from tinyvecdb import config
+    from simplevecdb import config
 
     # Test that we got a valid batch size
     batch_size = config.EMBEDDING_BATCH_SIZE
@@ -16,7 +16,7 @@ def test_batch_size_detection(capsys):
 
     # Print diagnostic info for manual inspection
     print("\n" + "=" * 60)
-    print("TinyVecDB Hardware Detection")
+    print("SimpleVecDB Hardware Detection")
     print("=" * 60)
 
     # System info
@@ -94,7 +94,7 @@ def test_batch_size_detection(capsys):
 
 def test_get_optimal_batch_size():
     """Test that get_optimal_batch_size returns valid values."""
-    from tinyvecdb.config import get_optimal_batch_size
+    from simplevecdb.config import get_optimal_batch_size
 
     batch_size = get_optimal_batch_size()
 

@@ -1,7 +1,7 @@
-site_name: TinyVecDB Docs
-site_url: https://coderdayton.github.io/tinyvecdb
-repo_url: https://github.com/coderdayton/tinyvecdb
-repo_name: tinyvecdb
+site_name: SimpleVecDB Docs
+site_url: https://coderdayton.github.io/simplevecdb
+repo_url: https://github.com/coderdayton/simplevecdb
+repo_name: simplevecdb
 
 theme:
   name: shadcn
@@ -17,9 +17,9 @@ theme:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/coderdayton/tinyvecdb
+      link: https://github.com/coderdayton/simplevecdb
     - icon: fontawesome/brands/python
-      link: https://pypi.org/project/tinyvecdb/
+      link: https://pypi.org/project/simplevecdb/
 
 plugins:
   - search

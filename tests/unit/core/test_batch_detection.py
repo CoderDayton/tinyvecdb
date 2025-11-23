@@ -8,7 +8,7 @@ import platform
 
 def test_get_optimal_batch_size_no_psutil():
     """Test get_optimal_batch_size when psutil is missing."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     with patch.dict(sys.modules, {"psutil": None}):
         # Should fallback to a reasonable default
@@ -18,7 +18,7 @@ def test_get_optimal_batch_size_no_psutil():
 
 def test_get_optimal_batch_size_with_torch_cuda():
     """Test get_optimal_batch_size with torch and CUDA available."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_torch = MagicMock()
     mock_torch.cuda.is_available.return_value = True
@@ -34,7 +34,7 @@ def test_get_optimal_batch_size_with_torch_cuda():
 
 def test_get_optimal_batch_size_cpu_memory():
     """Test get_optimal_batch_size based on system RAM (psutil)."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_psutil = MagicMock()
     mock_psutil.virtual_memory.return_value.available = 8 * 1024**3  # 8GB
@@ -51,7 +51,7 @@ def test_get_optimal_batch_size_cpu_memory():
 
 def test_get_optimal_batch_size_onnx_cuda():
     """Test batch size detection with ONNX Runtime CUDA provider."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_ort = MagicMock()
     mock_ort.get_available_providers.return_value = ["CUDAExecutionProvider"]
@@ -65,7 +65,7 @@ def test_get_optimal_batch_size_onnx_cuda():
 
 def test_get_optimal_batch_size_onnx_tensorrt():
     """Test batch size detection with ONNX Runtime TensorRT provider."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_ort = MagicMock()
     mock_ort.get_available_providers.return_value = ["TensorrtExecutionProvider"]
@@ -79,7 +79,7 @@ def test_get_optimal_batch_size_onnx_tensorrt():
 
 def test_get_optimal_batch_size_onnx_dml():
     """Test batch size detection with ONNX Runtime DirectML provider."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_ort = MagicMock()
     mock_ort.get_available_providers.return_value = ["DmlExecutionProvider"]
@@ -93,7 +93,7 @@ def test_get_optimal_batch_size_onnx_dml():
 
 def test_get_optimal_batch_size_onnx_coreml():
     """Test batch size detection with ONNX Runtime CoreML provider."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_ort = MagicMock()
     mock_ort.get_available_providers.return_value = ["CoreMLExecutionProvider"]
@@ -107,7 +107,7 @@ def test_get_optimal_batch_size_onnx_coreml():
 
 def test_get_optimal_batch_size_arm_low_cores():
     """Test batch size detection on ARM with few cores."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_psutil = MagicMock()
     mock_psutil.cpu_count.return_value = 2  # Few cores
@@ -123,7 +123,7 @@ def test_get_optimal_batch_size_arm_low_cores():
 
 def test_get_optimal_batch_size_arm_high_cores():
     """Test batch size detection on ARM with many cores."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_psutil = MagicMock()
     mock_psutil.cpu_count.return_value = 8  # Many cores
@@ -140,7 +140,7 @@ def test_get_optimal_batch_size_arm_high_cores():
 
 def test_get_optimal_batch_size_psutil_none_cpu_count():
     """Test get_optimal_batch_size when psutil.cpu_count returns None."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_psutil = MagicMock()
     mock_psutil.cpu_count.return_value = None  # Returns None
@@ -156,7 +156,7 @@ def test_get_optimal_batch_size_psutil_none_cpu_count():
 
 def test_get_optimal_batch_size_importerror_fallback():
     """Test get_optimal_batch_size falls back to defaults when psutil import fails."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     # Simulate ImportError by setting psutil to None
     with patch.dict(sys.modules, {"onnxruntime": None, "torch": None, "psutil": None}):
@@ -169,7 +169,7 @@ def test_get_optimal_batch_size_importerror_fallback():
 
 def test_get_optimal_batch_size_all_cuda_branches():
     """Test all CUDA VRAM size branches."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_torch = MagicMock()
     mock_torch.cuda.is_available.return_value = True
@@ -197,7 +197,7 @@ def test_get_optimal_batch_size_all_cuda_branches():
 
 def test_get_optimal_batch_size_mps_branches():
     """Test Apple MPS chip detection branches."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_torch = MagicMock()
     mock_torch.cuda.is_available.return_value = False
@@ -229,7 +229,7 @@ def test_get_optimal_batch_size_mps_branches():
 
 def test_get_optimal_batch_size_cpu_ram_branches():
     """Test CPU cores and RAM constraint branches."""
-    from tinyvecdb.core import get_optimal_batch_size
+    from simplevecdb.core import get_optimal_batch_size
 
     mock_psutil = MagicMock()
     mock_mem = MagicMock()

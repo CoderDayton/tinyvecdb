@@ -3,8 +3,8 @@ import pytest
 import numpy as np
 import json
 import sqlite3
-from tinyvecdb import VectorDB
-from tinyvecdb.types import Document, DistanceStrategy
+from simplevecdb import VectorDB
+from simplevecdb.types import Document, DistanceStrategy
 
 
 def test_init(empty_db):
@@ -100,7 +100,7 @@ def test_add_no_embeddings_raises(empty_db, monkeypatch):
 
     # Simulate module missing by setting it to None in sys.modules
     with monkeypatch.context() as m:
-        m.setitem(sys.modules, "tinyvecdb.embeddings.models", None)
+        m.setitem(sys.modules, "simplevecdb.embeddings.models", None)
 
         with pytest.raises(ValueError, match="No embeddings provided"):
             collection.add_texts(["test"])
@@ -134,7 +134,7 @@ def test_recover_dim(tmp_path):
 
 def test_dequantize_fallback():
     """Test dequantization logic directly."""
-    from tinyvecdb.core import _serialize_vector, _dequantize_vector, Quantization
+    from simplevecdb.core import _serialize_vector, _dequantize_vector, Quantization
     import numpy as np
 
     vec = np.array([0.1, 0.5, -0.5], dtype=np.float32)
@@ -196,9 +196,9 @@ def test_similarity_search_text_query(populated_db, monkeypatch):
     def mock_embed_texts(texts):
         return [[0.1, 0.0, 0.0, 0.0]]  # Close to apple
 
-    import tinyvecdb.embeddings.models
+    import simplevecdb.embeddings.models
 
-    monkeypatch.setattr(tinyvecdb.embeddings.models, "embed_texts", mock_embed_texts)
+    monkeypatch.setattr(simplevecdb.embeddings.models, "embed_texts", mock_embed_texts)
 
     results = collection.similarity_search("apple fruit", k=1)
     assert len(results) == 1
@@ -221,9 +221,9 @@ def test_hybrid_search_combines_rankings(populated_db, monkeypatch):
         # Always return a vector closest to "orange" regardless of the query text.
         return [[0.9, 0.9, 0.9, 0.9] for _ in texts]
 
-    import tinyvecdb.embeddings.models
+    import simplevecdb.embeddings.models
 
-    monkeypatch.setattr(tinyvecdb.embeddings.models, "embed_texts", skewed_embed)
+    monkeypatch.setattr(simplevecdb.embeddings.models, "embed_texts", skewed_embed)
 
     # Vector-only search should pick anything but "banana" according to the mocked embedding.
     vector_only = collection.similarity_search("banana yellow", k=1)
@@ -318,7 +318,7 @@ def test_distance_strategy_l1():
 
 def test_add_texts_batching(empty_db, monkeypatch):
     """Test that large inserts are batched correctly."""
-    from tinyvecdb import config
+    from simplevecdb import config
     collection = empty_db.collection("default")
 
     # Set small batch size for testing
@@ -354,7 +354,7 @@ def test_metadata_json_filtering(populated_db):
 
 def test_normalize_l2():
     """Test L2 normalization helper function."""
-    from tinyvecdb.core import _normalize_l2
+    from simplevecdb.core import _normalize_l2
 
     vec = np.array([3.0, 4.0])
     normalized = _normalize_l2(vec)
@@ -372,18 +372,18 @@ def test_as_langchain(empty_db):
     """Test LangChain integration factory method."""
     lc_store = empty_db.as_langchain()
 
-    from tinyvecdb.integrations.langchain import TinyVecDBVectorStore
+    from simplevecdb.integrations.langchain import SimpleVecDBVectorStore
 
-    assert isinstance(lc_store, TinyVecDBVectorStore)
+    assert isinstance(lc_store, SimpleVecDBVectorStore)
 
 
 def test_as_llama_index(empty_db):
     """Test LlamaIndex integration factory method."""
     li_store = empty_db.as_llama_index()
 
-    from tinyvecdb.integrations.llamaindex import TinyVecDBLlamaStore
+    from simplevecdb.integrations.llamaindex import SimpleVecDBLlamaStore
 
-    assert isinstance(li_store, TinyVecDBLlamaStore)
+    assert isinstance(li_store, SimpleVecDBLlamaStore)
 
 
 def test_dimension_mismatch_on_add(populated_db):
@@ -397,7 +397,7 @@ def test_dimension_mismatch_on_add(populated_db):
 
 def test_unsupported_quantization():
     """Test that invalid quantization mode raises error."""
-    from tinyvecdb.core import _serialize_vector
+    from simplevecdb.core import _serialize_vector
 
     with pytest.raises(ValueError, match="Unsupported quantization"):
         _serialize_vector(np.array([0.1, 0.2]), ("invalid"))  # type: ignore

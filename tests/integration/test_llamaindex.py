@@ -1,5 +1,5 @@
 import pytest
-from tinyvecdb.integrations.llamaindex import TinyVecDBLlamaStore
+from simplevecdb.integrations.llamaindex import SimpleVecDBLlamaStore
 from llama_index.core.vector_stores.types import VectorStoreQuery, VectorStoreQueryMode
 from llama_index.core.schema import TextNode
 
@@ -7,7 +7,7 @@ from llama_index.core.schema import TextNode
 @pytest.mark.integration
 def test_llamaindex_add(tmp_path):
     db_path = str(tmp_path / "llama_add.db")
-    store = TinyVecDBLlamaStore(db_path=db_path)
+    store = SimpleVecDBLlamaStore(db_path=db_path)
 
     node = TextNode(text="LlamaIndex test", embedding=[0.1] * 384)
     store.add([node])
@@ -20,7 +20,7 @@ def test_llamaindex_add(tmp_path):
 @pytest.mark.integration
 def test_llamaindex_query(tmp_path):
     db_path = str(tmp_path / "llama_query.db")
-    store = TinyVecDBLlamaStore(db_path=db_path)
+    store = SimpleVecDBLlamaStore(db_path=db_path)
 
     # Add a node to ensure we have something to query
     node = TextNode(text="Query target", embedding=[0.2] * 384)
@@ -42,7 +42,7 @@ def test_llamaindex_query(tmp_path):
 @pytest.mark.integration
 def test_llamaindex_delete(tmp_path):
     db_path = str(tmp_path / "llama_del.db")
-    store = TinyVecDBLlamaStore(db_path=db_path)
+    store = SimpleVecDBLlamaStore(db_path=db_path)
 
     node = TextNode(text="To delete", embedding=[0.3] * 384)
     store.add([node])
@@ -62,7 +62,7 @@ def test_llamaindex_delete(tmp_path):
 @pytest.mark.integration
 def test_llamaindex_client(tmp_path):
     db_path = str(tmp_path / "llama_client.db")
-    store = TinyVecDBLlamaStore(db_path=db_path)
+    store = SimpleVecDBLlamaStore(db_path=db_path)
     assert store.client is not None
 
 
@@ -70,7 +70,7 @@ def test_llamaindex_client(tmp_path):
 def test_llamaindex_query_with_filter(tmp_path):
     """Test query with metadata filters."""
     db_path = str(tmp_path / "llama_filter.db")
-    store = TinyVecDBLlamaStore(db_path=db_path)
+    store = SimpleVecDBLlamaStore(db_path=db_path)
 
     node1 = TextNode(
         text="Apple", embedding=[0.1] * 384, metadata={"category": "fruit"}
@@ -96,7 +96,7 @@ def test_llamaindex_query_with_filter(tmp_path):
 def test_llamaindex_delete_nonexistent(tmp_path):
     """Test deleting a non-existent node."""
     db_path = str(tmp_path / "llama_del_none.db")
-    store = TinyVecDBLlamaStore(db_path=db_path)
+    store = SimpleVecDBLlamaStore(db_path=db_path)
     store.delete("non-existent-id")
     # Should not raise error
 
@@ -104,7 +104,7 @@ def test_llamaindex_delete_nonexistent(tmp_path):
 @pytest.mark.integration
 def test_llamaindex_keyword_and_hybrid_modes(tmp_path):
     db_path = str(tmp_path / "llama_modes.db")
-    store = TinyVecDBLlamaStore(db_path=db_path)
+    store = SimpleVecDBLlamaStore(db_path=db_path)
 
     node1 = TextNode(text="Banana is yellow", embedding=[0.1] * 4)
     node2 = TextNode(text="Grape is purple", embedding=[0.2] * 4)

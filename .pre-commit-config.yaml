@@ -17,7 +17,7 @@ repos:
 
       - id: pytest-cov
         name: pytest coverage
-        entry: uv run pytest tests/ -vv --cov=src/tinyvecdb
+        entry: uv run pytest tests/ -vv --cov=src/simplevecdb
         language: system
         types: [python]
         pass_filenames: false

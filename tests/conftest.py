@@ -1,7 +1,7 @@
 # tests/conftest.py
 import pytest
 import numpy as np
-from tinyvecdb import VectorDB, Quantization, DistanceStrategy
+from simplevecdb import VectorDB, Quantization, DistanceStrategy
 
 
 @pytest.fixture

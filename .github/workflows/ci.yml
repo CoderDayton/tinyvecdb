@@ -27,7 +27,7 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Test with pytest
-        run: uv run pytest tests/ -vv --cov=src/tinyvecdb
+        run: uv run pytest tests/ -vv --cov=src/simplevecdb
 
       - name: Check coverage
         run: |

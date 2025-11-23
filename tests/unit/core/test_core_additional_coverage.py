@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from tinyvecdb.core import (
+from simplevecdb.core import (
     VectorDB,
     Quantization,
     _batched,
@@ -58,7 +58,7 @@ def test_add_texts_uses_local_embedder_numpy(tmp_path):
         [np.array([0.5, 0.5, 0.5], dtype=np.float32)],
     ]
 
-    with patch("tinyvecdb.embeddings.models.embed_texts", side_effect=embed_returns):
+    with patch("simplevecdb.embeddings.models.embed_texts", side_effect=embed_returns):
         db = VectorDB(str(db_path))
         collection = db.collection("default")
         first_ids = collection.add_texts(["alpha"], metadatas=[{"idx": 1}])
@@ -109,7 +109,7 @@ def test_similarity_search_bruteforce_filter(tmp_path):
     # However, db.conn was replaced with a wrapper. We need to update collection.conn too.
     collection.conn = db.conn
 
-    with patch("tinyvecdb.core._batched", new=fake_batched):
+    with patch("simplevecdb.core._batched", new=fake_batched):
         results = collection.similarity_search([1.0, 0.0, 0.0], k=2, filter=filter_dict)
 
     assert len(results) == 1

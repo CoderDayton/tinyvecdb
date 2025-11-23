@@ -1,7 +1,7 @@
 # tests/unit/test_search.py
 import pytest
 import numpy as np
-from tinyvecdb import VectorDB, DistanceStrategy, Quantization
+from simplevecdb import VectorDB, DistanceStrategy, Quantization
 
 
 @pytest.fixture

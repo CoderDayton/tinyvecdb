@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from tinyvecdb.integrations.langchain import TinyVecDBVectorStore
+from simplevecdb.integrations.langchain import SimpleVecDBVectorStore
 from langchain_core.documents import Document
 
 
@@ -13,7 +13,7 @@ def test_langchain_add_texts(tmp_path):
     mock_embedding.embed_documents.return_value = [[0.1] * 384]
     mock_embedding.embed_query.return_value = [0.1] * 384
 
-    store = TinyVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
+    store = SimpleVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
 
     texts = ["LangChain test"]
     metadatas = [{"source": "lc"}]
@@ -34,7 +34,7 @@ def test_langchain_similarity_search(tmp_path):
     mock_embedding.embed_query.return_value = [0.1] * 384
     mock_embedding.embed_documents.return_value = [[0.1] * 384]
 
-    store = TinyVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
+    store = SimpleVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
 
     # Add data
     store.add_texts(["Query target"])
@@ -51,14 +51,14 @@ def test_langchain_from_texts(tmp_path):
     mock_embedding = MagicMock()
     mock_embedding.embed_documents.return_value = [[0.1] * 10]
 
-    store = TinyVecDBVectorStore.from_texts(
+    store = SimpleVecDBVectorStore.from_texts(
         texts=["Hello"],
         embedding=mock_embedding,
         metadatas=[{"id": 1}],
         db_path=db_path,
     )
 
-    assert isinstance(store, TinyVecDBVectorStore)
+    assert isinstance(store, SimpleVecDBVectorStore)
     # Verify DB was created
     assert store._collection._dim == 10
 
@@ -68,7 +68,7 @@ def test_langchain_delete(tmp_path):
     db_path = str(tmp_path / "lc_del.db")
     mock_embedding = MagicMock()
     mock_embedding.embed_documents.return_value = [[0.1] * 384]
-    store = TinyVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
+    store = SimpleVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
 
     ids = store.add_texts(["To delete"])
     assert len(ids) == 1
@@ -92,7 +92,7 @@ def test_langchain_async_methods(tmp_path):
         mock_embedding.embed_documents.return_value = [[0.1] * 384]
         mock_embedding.embed_query.return_value = [0.1] * 384
 
-        store = TinyVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
+        store = SimpleVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
 
         # aadd_texts
         ids = await store.aadd_texts(["Async test"])
@@ -117,7 +117,7 @@ def test_langchain_mmr(tmp_path):
     mock_embedding.embed_query.return_value = [0.1] * 384
     mock_embedding.embed_documents.return_value = [[0.1] * 384]
 
-    store = TinyVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
+    store = SimpleVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
     store.add_texts(["MMR test"])
 
     docs = store.max_marginal_relevance_search("query", k=1)
@@ -131,7 +131,7 @@ def test_langchain_keyword_and_hybrid(tmp_path):
     mock_embedding.embed_documents.return_value = [[0.1] * 4, [0.2] * 4]
     mock_embedding.embed_query.return_value = [0.3] * 4
 
-    store = TinyVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
+    store = SimpleVecDBVectorStore(db_path=db_path, embedding=mock_embedding)
     store.add_texts(["banana is yellow", "grape is purple"])
 
     keyword_docs = store.keyword_search("banana", k=1)

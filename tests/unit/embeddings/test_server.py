@@ -4,8 +4,8 @@ import pytest
 from unittest.mock import patch, ANY
 from fastapi.testclient import TestClient
 
-from tinyvecdb.embeddings.server import app, ModelRegistry
-from tinyvecdb.embeddings import server
+from simplevecdb.embeddings.server import app, ModelRegistry
+from simplevecdb.embeddings import server
 
 
 client = TestClient(app)
@@ -29,7 +29,7 @@ def test_server_health():
 
 def test_embeddings_endpoint_single_string():
     """Test /v1/embeddings with single string input."""
-    with patch("tinyvecdb.embeddings.server.embed_texts") as mock_embed:
+    with patch("simplevecdb.embeddings.server.embed_texts") as mock_embed:
         mock_embed.return_value = [[0.1, 0.2, 0.3]]
 
         response = client.post(
@@ -50,7 +50,7 @@ def test_embeddings_endpoint_single_string():
 
 def test_embeddings_endpoint_list_of_strings():
     """Test /v1/embeddings with list of strings."""
-    with patch("tinyvecdb.embeddings.server.embed_texts") as mock_embed:
+    with patch("simplevecdb.embeddings.server.embed_texts") as mock_embed:
         mock_embed.return_value = [[0.1, 0.2], [0.3, 0.4]]
 
         response = client.post("/v1/embeddings", json={"input": ["first", "second"]})
@@ -65,7 +65,7 @@ def test_embeddings_endpoint_list_of_strings():
 
 def test_embeddings_endpoint_token_array():
     """Test /v1/embeddings with token array (list of ints)."""
-    with patch("tinyvecdb.embeddings.server.embed_texts") as mock_embed:
+    with patch("simplevecdb.embeddings.server.embed_texts") as mock_embed:
         mock_embed.return_value = [[0.5, 0.6]]
 
         response = client.post("/v1/embeddings", json={"input": [1, 2, 3, 4]})
@@ -79,7 +79,7 @@ def test_embeddings_endpoint_token_array():
 
 def test_embeddings_endpoint_error_handling():
     """Test /v1/embeddings error handling."""
-    with patch("tinyvecdb.embeddings.server.embed_texts") as mock_embed:
+    with patch("simplevecdb.embeddings.server.embed_texts") as mock_embed:
         mock_embed.side_effect = Exception("Model error")
 
         response = client.post("/v1/embeddings", json={"input": "test"})
@@ -90,7 +90,7 @@ def test_embeddings_endpoint_error_handling():
 
 def test_embeddings_endpoint_usage_tokens():
     """Test /v1/embeddings returns usage tokens."""
-    with patch("tinyvecdb.embeddings.server.embed_texts") as mock_embed:
+    with patch("simplevecdb.embeddings.server.embed_texts") as mock_embed:
         mock_embed.return_value = [[0.1, 0.2]]
 
         response = client.post("/v1/embeddings", json={"input": "hello world test"})
@@ -112,12 +112,12 @@ def test_list_models_endpoint():
     assert len(data["data"]) > 0
     assert "id" in data["data"][0]
     assert data["data"][0]["object"] == "model"
-    assert data["data"][0]["owned_by"] == "tinyvecdb"
+    assert data["data"][0]["owned_by"] == "simplevecdb"
 
 
 def test_server_run_with_args():
     """Test server.run_server with custom host/port."""
-    from tinyvecdb.embeddings.server import run_server
+    from simplevecdb.embeddings.server import run_server
 
     with patch("uvicorn.run") as mock_run:
         run_server(host="127.0.0.1", port=9000)
@@ -129,10 +129,10 @@ def test_server_run_with_args():
 
 def test_server_run_default_config():
     """Test server.run_server uses config defaults."""
-    from tinyvecdb.embeddings.server import run_server
+    from simplevecdb.embeddings.server import run_server
 
     with patch("uvicorn.run") as mock_run:
-        with patch("tinyvecdb.embeddings.server.config") as mock_config:
+        with patch("simplevecdb.embeddings.server.config") as mock_config:
             mock_config.SERVER_HOST = "0.0.0.0"
             mock_config.SERVER_PORT = 8080
 
@@ -145,7 +145,7 @@ def test_server_run_default_config():
 
 def test_server_run_cli_args():
     """Test server.run_server parses CLI arguments."""
-    from tinyvecdb.embeddings.server import run_server
+    from simplevecdb.embeddings.server import run_server
     import sys
 
     with patch("uvicorn.run") as mock_run:
@@ -161,7 +161,7 @@ def test_server_run_cli_args():
 
 def test_embeddings_default_model():
     """Test /v1/embeddings uses default model when not specified."""
-    with patch("tinyvecdb.embeddings.server.embed_texts") as mock_embed:
+    with patch("simplevecdb.embeddings.server.embed_texts") as mock_embed:
         mock_embed.return_value = [[0.1, 0.2]]
 
         response = client.post("/v1/embeddings", json={"input": "test"})

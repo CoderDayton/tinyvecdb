@@ -7,10 +7,10 @@ import pytest
 
 def test_llamaindex_delete_nodes(tmp_path):
     """Test LlamaIndex integration delete_nodes method."""
-    from tinyvecdb.integrations.llamaindex import TinyVecDBLlamaStore
+    from simplevecdb.integrations.llamaindex import SimpleVecDBLlamaStore
 
     db_path = tmp_path / "li_del.db"
-    store = TinyVecDBLlamaStore(str(db_path))
+    store = SimpleVecDBLlamaStore(str(db_path))
 
     # Delete
     store.delete_nodes(["node1"])
@@ -19,11 +19,11 @@ def test_llamaindex_delete_nodes(tmp_path):
 
 def test_llamaindex_query(tmp_path):
     """Test LlamaIndex integration query method."""
-    from tinyvecdb.integrations.llamaindex import TinyVecDBLlamaStore
+    from simplevecdb.integrations.llamaindex import SimpleVecDBLlamaStore
     from llama_index.core.vector_stores.types import VectorStoreQuery
 
     db_path = tmp_path / "li_query.db"
-    store = TinyVecDBLlamaStore(str(db_path))
+    store = SimpleVecDBLlamaStore(str(db_path))
 
     # Mock the underlying VectorDB instance's similarity_search
     mock_doc = MagicMock()
@@ -41,17 +41,17 @@ def test_llamaindex_query(tmp_path):
 
 def test_llamaindex_store_text_property(tmp_path):
     """store_text property mirrors stores_text attribute."""
-    from tinyvecdb.integrations.llamaindex import TinyVecDBLlamaStore
+    from simplevecdb.integrations.llamaindex import SimpleVecDBLlamaStore
 
-    store = TinyVecDBLlamaStore(str(tmp_path / "li_prop.db"))
+    store = SimpleVecDBLlamaStore(str(tmp_path / "li_prop.db"))
     assert store.store_text is True
 
 
 def test_llamaindex_add_handles_missing_embeddings(tmp_path):
     """Ensure add() gracefully handles nodes with partial embeddings."""
-    from tinyvecdb.integrations.llamaindex import TinyVecDBLlamaStore
+    from simplevecdb.integrations.llamaindex import SimpleVecDBLlamaStore
 
-    store = TinyVecDBLlamaStore(str(tmp_path / "li_add.db"))
+    store = SimpleVecDBLlamaStore(str(tmp_path / "li_add.db"))
 
     node_with_embedding = MagicMock()
     node_with_embedding.get_content.return_value = "text1"
@@ -76,11 +76,11 @@ def test_llamaindex_add_handles_missing_embeddings(tmp_path):
 
 def test_llamaindex_delete_nodes_invokes_delete(tmp_path):
     """delete_nodes should iterate over provided IDs and call delete()."""
-    from tinyvecdb.integrations.llamaindex import TinyVecDBLlamaStore
+    from simplevecdb.integrations.llamaindex import SimpleVecDBLlamaStore
 
-    store = TinyVecDBLlamaStore(str(tmp_path / "li_delete_nodes.db"))
+    store = SimpleVecDBLlamaStore(str(tmp_path / "li_delete_nodes.db"))
 
-    with patch.object(TinyVecDBLlamaStore, "delete", autospec=True) as mock_delete:
+    with patch.object(SimpleVecDBLlamaStore, "delete", autospec=True) as mock_delete:
         store.delete_nodes(["node-a", "node-b"])
 
     assert mock_delete.call_count == 2
@@ -90,10 +90,10 @@ def test_llamaindex_delete_nodes_invokes_delete(tmp_path):
 
 def test_llamaindex_query_requires_input(tmp_path):
     """query() should raise when both embedding and string inputs are missing."""
-    from tinyvecdb.integrations.llamaindex import TinyVecDBLlamaStore
+    from simplevecdb.integrations.llamaindex import SimpleVecDBLlamaStore
     from llama_index.core.vector_stores.types import VectorStoreQuery
 
-    store = TinyVecDBLlamaStore(str(tmp_path / "li_query_err.db"))
+    store = SimpleVecDBLlamaStore(str(tmp_path / "li_query_err.db"))
     query = VectorStoreQuery(query_embedding=None, query_str=None, similarity_top_k=1)
 
     with pytest.raises(ValueError):
