@@ -4972,7 +4972,7 @@ requires-dist = [
     { name = "psutil", specifier = ">=5.9.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "sentence-transformers", extras = ["onnx"], marker = "extra == 'server'", specifier = "==3.3.1" },
-    { name = "sqlite-vec", specifier = ">=0.1.2" },
+    { name = "sqlite-vec", specifier = ">=0.1.6" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.30" },
 ]
 provides-extras = ["server", "examples"]

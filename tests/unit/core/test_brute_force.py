@@ -39,20 +39,16 @@ def test_brute_force_search_with_filter(tmp_path):
     assert len(results) <= 1  # Only red should match
 
 
-def test_brute_force_search_with_ip_distance(tmp_path):
-    """Test brute force search with IP distance strategy."""
-    db_path = tmp_path / "test_brute_ip.db"
-    # Note: Can't use IP with CREATE TABLE, but can test brute force path
-    db = VectorDB(str(db_path), distance_strategy=DistanceStrategy.COSINE)
+def test_brute_force_search_with_l1_distance(tmp_path):
+    """Test brute force search with L1 distance strategy."""
+    db_path = tmp_path / "test_brute_l1.db"
+    db = VectorDB(str(db_path), distance_strategy=DistanceStrategy.L1)
     db.add_texts(["a", "b"], embeddings=[[0.1, 0.2], [0.3, 0.4]])
 
-    # Manually set to IP to test the brute force IP branch
-    db.distance_strategy = DistanceStrategy.IP
-    db.conn.execute("DROP TABLE IF EXISTS vec_index")
-
+    # Call brute force directly to test L1 distance path
     query_vec = np.array([0.1, 0.2], dtype=np.float32)
     results = db._brute_force_search(query_vec, k=1, filter=None)
-    assert len(results) >= 0
+    assert len(results) >= 1
 
 
 def test_brute_force_search_with_list_filter(tmp_path):

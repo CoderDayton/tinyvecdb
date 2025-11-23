@@ -2,17 +2,41 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-
-from sentence_transformers import SentenceTransformer
-from huggingface_hub import snapshot_download
+from typing import Any, TYPE_CHECKING
 
 from ..config import config
+
+if TYPE_CHECKING:  # pragma: no cover - import only for typing
+    from sentence_transformers import SentenceTransformer as SentenceTransformerType
+else:  # Fallback to Any to keep runtime import optional
+    SentenceTransformerType = Any
 
 DEFAULT_MODEL = config.EMBEDDING_MODEL
 CACHE_DIR = Path(os.path.expanduser(config.EMBEDDING_CACHE_DIR))
 
 
-def load_default_model() -> SentenceTransformer:
+def _load_sentence_transformer_cls() -> type[SentenceTransformerType]:
+    """Import SentenceTransformer lazily to avoid heavy deps at module import."""
+    try:
+        from sentence_transformers import SentenceTransformer as cls
+    except Exception as exc:  # pragma: no cover - exercised when deps missing
+        raise ImportError(
+            "Embeddings support requires the 'tinyvecdb[server]' extra."
+        ) from exc
+    return cls
+
+
+def _load_snapshot_download():
+    try:
+        from huggingface_hub import snapshot_download
+    except Exception as exc:  # pragma: no cover - exercised when deps missing
+        raise ImportError(
+            "Embeddings support requires the 'tinyvecdb[server]' extra."
+        ) from exc
+    return snapshot_download
+
+
+def load_default_model() -> SentenceTransformerType:
     """
     Load the embedding model specified in the config.
 
@@ -21,14 +45,17 @@ def load_default_model() -> SentenceTransformer:
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    model_path = snapshot_download(
+    snapshot = _load_snapshot_download()
+    st_cls = _load_sentence_transformer_cls()
+
+    model_path = snapshot(
         repo_id=DEFAULT_MODEL,
         cache_dir=CACHE_DIR,
         local_files_only=False,  # auto-download first time
     )
 
     # Quantized + CPU-friendly
-    model = SentenceTransformer(
+    model = st_cls(
         model_path,
         model_kwargs={"dtype": "auto", "file_name": "model.onnx"},
         tokenizer_kwargs={"padding": True, "truncation": True, "max_length": 512},
@@ -42,10 +69,10 @@ def load_default_model() -> SentenceTransformer:
 
 
 # Global singleton
-_default_model: SentenceTransformer | None = None
+_default_model: SentenceTransformerType | None = None
 
 
-def get_embedder() -> SentenceTransformer:
+def get_embedder() -> SentenceTransformerType:
     """
     Get the global singleton embedding model.
 

@@ -49,7 +49,7 @@ Configuration for `tinyvecdb-server`.
 | Variable      | Description                 | Default                                   |
 | ------------- | --------------------------- | ----------------------------------------- |
 | `SERVER_HOST` | Host to bind the server to. | `0.0.0.0`                                 |
-| `SERVER_PORT` | Port to bind the server to. | `8000` (Code default) / `53287` (Example) |
+| `SERVER_PORT` | Port to bind the server to. | `53287` (Code default) / `8000` (Example) |
 
 ## Using with Custom Embedding Models
 

@@ -245,18 +245,17 @@ def test_distance_strategy_l2():
 
     db.close()
 
+def test_distance_strategy_l1():
+    """Test L1 (Manhattan) distance strategy."""
+    db = VectorDB(":memory:", distance_strategy=DistanceStrategy.L1)
 
-@pytest.mark.skip(reason="sqlite-vec may not support 'inner' distance_metric yet")
-def test_distance_strategy_ip():
-    """Test Inner Product distance strategy."""
-    db = VectorDB(":memory:", distance_strategy=DistanceStrategy.IP)
-
-    texts = ["a", "b"]
-    embs = [[1.0, 0.0], [0.0, 1.0]]
+    texts = ["a", "b", "c"]
+    embs = [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]
     db.add_texts(texts, embeddings=embs)
 
-    results = db.similarity_search([1.0, 0.5], k=2)
-    assert len(results) == 2
+    # Query closest to "a"
+    results = db.similarity_search([1.0, 0.0], k=1)
+    assert results[0][0].page_content == "a"
 
     db.close()
 

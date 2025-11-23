@@ -25,4 +25,4 @@ class DistanceStrategy(StrEnum):
 
     COSINE = "cosine"
     L2 = "l2"  # euclidean
-    IP = "inner"  # inner product (negative distance = higher similarity)
+    L1 = "l1"  # manhattan

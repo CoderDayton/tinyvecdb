@@ -14,6 +14,7 @@ import multiprocessing
 import itertools
 
 from .types import Document, DistanceStrategy, StrEnum
+from .utils import _import_optional
 
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
@@ -81,7 +82,6 @@ def _batched(iterable: Iterable[Any], n: int) -> Iterable[Sequence[Any]]:
             yield batch
 
 
-
 def get_optimal_batch_size() -> int:
     """
     Automatically determine optimal batch size based on hardware.
@@ -97,9 +97,8 @@ def get_optimal_batch_size() -> int:
         Optimal batch size for the detected hardware.
     """
     # 1. Try PyTorch detection first
-    try:
-        import torch
-
+    torch = _import_optional("torch")
+    if torch is not None:
         # Check for NVIDIA CUDA GPU
         if torch.cuda.is_available():
             # Get GPU properties
@@ -139,13 +138,9 @@ def get_optimal_batch_size() -> int:
                 except Exception:
                     return 32
 
-    except ImportError:
-        pass
-
     # 2. Try ONNX Runtime detection
-    try:
-        import onnxruntime as ort  # type: ignore
-
+    ort = _import_optional("onnxruntime")
+    if ort is not None:
         providers = ort.get_available_providers()
         if (
             "CUDAExecutionProvider" in providers
@@ -159,17 +154,14 @@ def get_optimal_batch_size() -> int:
         if "CoreMLExecutionProvider" in providers:
             # Apple CoreML
             return 32
-    except ImportError:
-        pass
 
     # 3. CPU fallback - scale with available cores and RAM
-    try:
-        import psutil  # type: ignore
-
+    psutil = _import_optional("psutil")
+    if psutil is not None:
         # Physical cores are better for dense math
         cpu_count = psutil.cpu_count(logical=False) or multiprocessing.cpu_count()
         available_ram_gb = psutil.virtual_memory().available / (1024**3)
-    except ImportError:
+    else:
         cpu_count = multiprocessing.cpu_count()
         available_ram_gb = 8.0  # Assume decent machine
 
@@ -203,6 +195,17 @@ def get_optimal_batch_size() -> int:
         return min(base_batch, 16)
 
     return base_batch
+
+
+def create_vec_table_sql(vec_type="float", distance_metric=None):
+    # distance_metric goes INSIDE the column definition
+    sql_template = f"CREATE VIRTUAL TABLE vec_index USING vec0(embedding {vec_type}"
+
+    if distance_metric and not vec_type.startswith("bit"):
+        sql_template += f" distance_metric={distance_metric}"
+
+    sql_template += ")"
+    return sql_template
 
 
 class VectorDB:
@@ -278,22 +281,13 @@ class VectorDB:
                 storage_dim = ((dim + 7) // 8) * 8
 
             vec_type = {
-                Quantization.FLOAT: f"float[{dim}]",
-                Quantization.INT8: f"int8[{dim}]",
+                Quantization.FLOAT: f"float[{storage_dim}]",
+                Quantization.INT8: f"int8[{storage_dim}]",
                 Quantization.BIT: f"bit[{storage_dim}]",
             }[self.quantization]
 
-            # BIT quantization implies Hamming distance; others need explicit metric
-            distance_clause = ""
-            if self.quantization != Quantization.BIT:
-                distance_clause = f"distance_metric={self.distance_strategy.value}"
-
             self.conn.execute(
-                f"""
-                CREATE VIRTUAL TABLE vec_index USING vec0(
-                embedding {vec_type} {distance_clause}
-                )
-                """
+                create_vec_table_sql(vec_type, self.distance_strategy.value)
             )
 
     # ------------------------------------------------------------------ #
@@ -393,10 +387,26 @@ class VectorDB:
 
             # Ensure table exists (idempotent check)
             if self._dim is None:
-                dim = len(batch_embeddings[0])
+                first_emb = batch_embeddings[0]
+                if isinstance(first_emb, (list, tuple)):
+                    dim = len(first_emb)
+                elif isinstance(first_emb, np.ndarray):
+                    dim = len(first_emb)
+                else:
+                    dim = len(list(first_emb))  # type: ignore
                 self._ensure_virtual_table(dim)
-            elif len(batch_embeddings[0]) != self._dim:
-                raise ValueError(f"Dimension mismatch: existing {self._dim}, got {len(batch_embeddings[0])}")
+            else:
+                first_emb = batch_embeddings[0]
+                if isinstance(first_emb, (list, tuple)):
+                    first_dim = len(first_emb)
+                elif isinstance(first_emb, np.ndarray):
+                    first_dim = len(first_emb)
+                else:
+                    first_dim = len(list(first_emb))  # type: ignore
+                if first_dim != self._dim:
+                    raise ValueError(
+                        f"Dimension mismatch: existing {self._dim}, got {first_dim}"
+                    )
 
             # Normalize for cosine before quantization
             emb_np = np.array(batch_embeddings, dtype=np.float32)
@@ -523,7 +533,9 @@ class VectorDB:
             ).fetchall()
         except sqlite3.OperationalError:
             # Fallback brute-force
-            candidates = self._brute_force_search(query_vec, k, filter)
+            bf_candidates = self._brute_force_search(query_vec, k, filter)
+            # Convert to expected format for results processing below
+            candidates = bf_candidates
 
         results = []
         for cid, dist in candidates[:k]:
@@ -639,16 +651,23 @@ class VectorDB:
                 distances = 1 - similarities
             elif self.distance_strategy == DistanceStrategy.L2:
                 distances = np.linalg.norm(vectors - query_vec, axis=1)
-            else:  # IP
-                distances = -np.dot(vectors, query_vec)
+            elif self.distance_strategy == DistanceStrategy.L1:
+                # Manhattan distance: sum of absolute differences
+                distances = np.sum(np.abs(vectors - query_vec), axis=1)
+            else:
+                raise ValueError(
+                    f"Unsupported distance strategy: {self.distance_strategy}"
+                )
 
             # Apply filter if any
             batch_candidates = []
-            for i, (cid, dist, meta_json) in enumerate(zip(ids, distances, metas)):
+            for _, (cid, dist, meta_json) in enumerate(zip(ids, distances, metas)):
                 if filter:
                     meta = json.loads(meta_json) if meta_json else {}
                     if not all(
-                        meta.get(k) == v if not isinstance(v, list) else meta.get(k) in v
+                        meta.get(k) == v
+                        if not isinstance(v, list)
+                        else meta.get(k) in v
                         for k, v in filter.items()
                     ):
                         continue
@@ -679,6 +698,57 @@ class VectorDB:
                 f"DELETE FROM vec_index WHERE rowid IN ({placeholders})", tuple(ids)
             )
         self.conn.execute("VACUUM")
+
+    def remove_texts(
+        self,
+        texts: Sequence[str] | None = None,
+        filter: dict[str, Any] | None = None,
+    ) -> int:
+        """
+        Remove texts by content or metadata filter. Part of CRUD operations.
+
+        Args:
+            texts: List of exact text strings to remove (optional).
+            filter: Metadata filter dict to remove matching documents (optional).
+
+        Returns:
+            Number of documents deleted.
+
+        Raises:
+            ValueError: If neither texts nor filter is provided.
+        """
+        if texts is None and filter is None:
+            raise ValueError("Must provide either texts or filter to remove")
+
+        ids_to_delete: list[int] = []
+
+        if texts:
+            # Find IDs by exact text match
+            placeholders = ",".join("?" for _ in texts)
+            rows = self.conn.execute(
+                f"SELECT id FROM {self._table_name} WHERE text IN ({placeholders})",
+                tuple(texts),
+            ).fetchall()
+            ids_to_delete.extend(r[0] for r in rows)
+
+        if filter:
+            # Find IDs by metadata filter
+            filter_clause, filter_params = self._build_filter_clause(filter)
+            # Remove leading "AND"
+            filter_clause = filter_clause.replace("AND ", "", 1)
+            where_clause = f"WHERE {filter_clause}" if filter_clause else ""
+            rows = self.conn.execute(
+                f"SELECT id FROM {self._table_name} {where_clause}",
+                tuple(filter_params),
+            ).fetchall()
+            ids_to_delete.extend(r[0] for r in rows)
+
+        # Remove duplicates and delete
+        unique_ids = list(set(ids_to_delete))
+        if unique_ids:
+            self.delete_by_ids(unique_ids)
+
+        return len(unique_ids)
 
     # ------------------------------------------------------------------ #
     # Integrations
