@@ -37,10 +37,11 @@ def test_quantization_storage():
     from tinyvecdb import VectorDB
 
     db = VectorDB(":memory:", quantization=Quantization.INT8)
+    collection = db.collection("default")
     emb = np.random.randn(100, 128).tolist()
-    db.add_texts(["t"] * 100, embeddings=emb)
+    collection.add_texts(["t"] * 100, embeddings=emb)
 
     # Manual check serialized is int8
-    blob = db.conn.execute("SELECT embedding FROM vec_index LIMIT 1").fetchone()[0]
+    blob = db.conn.execute(f"SELECT embedding FROM {collection._vec_table_name} LIMIT 1").fetchone()[0]
     assert len(blob) == 128  # 1 byte/dim
     db.close()

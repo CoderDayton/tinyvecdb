@@ -1,7 +1,8 @@
 from tinyvecdb import VectorDB
 
 db = VectorDB(":memory:")
-db.add_texts(["Paris is beautiful", "Berlin has great beer"])  # auto-embeds!
+collection = db.collection("default")
+collection.add_texts(["Paris is beautiful", "Berlin has great beer"])  # auto-embeds!
 
-results = db.similarity_search("Where should I drink beer?", k=1)
+results = collection.similarity_search("Where should I drink beer?", k=1)
 print(results[0][0].page_content)  # → Berlin has great beer

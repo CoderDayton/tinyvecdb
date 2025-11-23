@@ -1,12 +1,23 @@
 """Embeddings server API tests."""
 
-from unittest.mock import patch
+import pytest
+from unittest.mock import patch, ANY
 from fastapi.testclient import TestClient
 
-from tinyvecdb.embeddings.server import app
+from tinyvecdb.embeddings.server import app, ModelRegistry
+from tinyvecdb.embeddings import server
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def unlocked_registry():
+    """Allow arbitrary test models in unit tests."""
+    original = server.registry
+    server.registry = ModelRegistry({"default": "test-default"}, allow_unlisted=True)
+    yield
+    server.registry = original
 
 
 def test_server_health():
@@ -32,7 +43,9 @@ def test_embeddings_endpoint_single_string():
         assert data["data"][0]["embedding"] == [0.1, 0.2, 0.3]
         assert data["data"][0]["index"] == 0
         assert data["model"] == "test-model"
-        mock_embed.assert_called_once_with(["hello world"])
+        mock_embed.assert_called_once_with(
+            ["hello world"], model_id="test-model", batch_size=ANY
+        )
 
 
 def test_embeddings_endpoint_list_of_strings():
@@ -148,8 +161,6 @@ def test_server_run_cli_args():
 
 def test_embeddings_default_model():
     """Test /v1/embeddings uses default model when not specified."""
-    from tinyvecdb.embeddings.server import DEFAULT_MODEL
-
     with patch("tinyvecdb.embeddings.server.embed_texts") as mock_embed:
         mock_embed.return_value = [[0.1, 0.2]]
 
@@ -157,4 +168,5 @@ def test_embeddings_default_model():
 
         assert response.status_code == 200
         data = response.json()
-        assert data["model"] == DEFAULT_MODEL
+        # Registry fixture sets default to "test-default"
+        assert data["model"] == "test-default"

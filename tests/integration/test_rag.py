@@ -31,7 +31,7 @@ def test_rag_end_to_end(populated_db: VectorDB, monkeypatch):
 
     # Simple RAG chain (real code would use langchain/llama_index)
     query = "What color is grape?"
-    contexts = populated_db.similarity_search(query, k=2)  # embed query in real
+    contexts = populated_db.collection("default").similarity_search(query, k=2)  # embed query in real
     context_str = "\n".join(doc.page_content for doc, _ in contexts)
     prompt = f"Context: {context_str}\nQuestion: {query}"
 
@@ -65,7 +65,7 @@ def test_rag_with_ollama(populated_db):
         # assuming we had a real embedding function available.
         query_emb = [0.1, 0.1, 0.1, 0.1] 
         
-        contexts = populated_db.similarity_search(query_emb, k=2)
+        contexts = populated_db.collection("default").similarity_search(query_emb, k=2)
         context = "\n".join(d.page_content for d, _ in contexts)
         response = client.generate(
             model="llama3", prompt=f"Using context: {context}, answer: {query}"

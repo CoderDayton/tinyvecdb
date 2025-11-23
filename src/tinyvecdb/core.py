@@ -197,65 +197,56 @@ def get_optimal_batch_size() -> int:
     return base_batch
 
 
-def create_vec_table_sql(vec_type="float", distance_metric=None):
-    # distance_metric goes INSIDE the column definition
-    sql_template = f"CREATE VIRTUAL TABLE vec_index USING vec0(embedding {vec_type}"
-
-    if distance_metric and not vec_type.startswith("bit"):
-        sql_template += f" distance_metric={distance_metric}"
-
-    sql_template += ")"
-    return sql_template
-
-
-class VectorDB:
+class VectorCollection:
     """
-    Dead-simple local vector database powered by sqlite-vec.
-    One SQLite file = one collection. Chroma-style API with quantization.
+    Represents a single vector collection within the database.
     """
 
     def __init__(
         self,
-        path: str | Path = ":memory:",
-        distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
-        quantization: Quantization = Quantization.FLOAT,
+        conn: sqlite3.Connection,
+        name: str,
+        distance_strategy: DistanceStrategy,
+        quantization: Quantization,
     ):
-        self.path = str(path)
+        self.conn = conn
+        self.name = name
         self.distance_strategy = distance_strategy
         self.quantization = quantization
 
-        self.conn = sqlite3.connect(self.path, check_same_thread=False)
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.enable_load_extension(True)
-        try:
-            sqlite_vec.load(self.conn)
-            self._extension_available = True
-        except sqlite3.OperationalError:
-            self._extension_available = False
+        # Sanitize name to prevent SQL injection
+        if not re.match(r"^[a-zA-Z0-9_]+$", name):
+            raise ValueError(
+                f"Invalid collection name '{name}'. Must be alphanumeric + underscores."
+            )
 
-        self.conn.enable_load_extension(False)
+        # Table names
+        if name == "default":
+            self._table_name = "tinyvec_items"
+            self._vec_table_name = "vec_index"
+        else:
+            self._table_name = f"items_{name}"
+            self._vec_table_name = f"vectors_{name}"
 
+        self._fts_table_name = f"{self._table_name}_fts"
+        self._fts_enabled = False
         self._dim: int | None = None
-        self._table_name = "tinyvec_items"
+
         self._create_table()
         self._recover_dim()
 
-    # ------------------------------------------------------------------ #
-    # Internal helpers
-    # ------------------------------------------------------------------ #
     def _recover_dim(self) -> None:
         """Attempt to recover dimension from existing virtual table schema."""
         try:
             row = self.conn.execute(
-                "SELECT sql FROM sqlite_master WHERE name = 'vec_index'"
+                "SELECT sql FROM sqlite_master WHERE name = ?", (self._vec_table_name,)
             ).fetchone()
             if row and row[0]:
-                # Match float[N], int8[N], or bit[N]
                 match = re.search(r"(?:float|int8|bit)\[(\d+)\]", row[0])
                 if match:
                     self._dim = int(match.group(1))
         except Exception:
-            pass  # Ignore errors, will be set on first add
+            pass
 
     def _create_table(self) -> None:
         self.conn.execute(
@@ -267,14 +258,48 @@ class VectorDB:
             )
             """
         )
+        self._ensure_fts_table()
+
+    def _ensure_fts_table(self) -> None:
+        try:
+            self.conn.execute(
+                f"""
+                CREATE VIRTUAL TABLE IF NOT EXISTS {self._fts_table_name}
+                USING fts5(text)
+                """
+            )
+            self._fts_enabled = True
+        except sqlite3.OperationalError:
+            self._fts_enabled = False
+
+    def _upsert_fts_rows(self, ids: Sequence[int], texts: Sequence[str]) -> None:
+        if not self._fts_enabled or not ids:
+            return
+        placeholders = ",".join("?" for _ in ids)
+        self.conn.execute(
+            f"DELETE FROM {self._fts_table_name} WHERE rowid IN ({placeholders})",
+            tuple(ids),
+        )
+        rows = list(zip(ids, texts))
+        self.conn.executemany(
+            f"INSERT INTO {self._fts_table_name}(rowid, text) VALUES (?, ?)", rows
+        )
+
+    def _delete_fts_rows(self, ids: Sequence[int]) -> None:
+        if not self._fts_enabled or not ids:
+            return
+        placeholders = ",".join("?" for _ in ids)
+        self.conn.execute(
+            f"DELETE FROM {self._fts_table_name} WHERE rowid IN ({placeholders})",
+            tuple(ids),
+        )
 
     def _ensure_virtual_table(self, dim: int) -> None:
         if self._dim is not None and self._dim != dim:
             raise ValueError(f"Dimension mismatch: existing {self._dim}, got {dim}")
         if self._dim is None:
-            # First insert – recreate virtual table with correct dimension
             self._dim = dim
-            self.conn.execute("DROP TABLE IF EXISTS vec_index")
+            self.conn.execute(f"DROP TABLE IF EXISTS {self._vec_table_name}")
 
             storage_dim = dim
             if self.quantization == Quantization.BIT:
@@ -286,41 +311,45 @@ class VectorDB:
                 Quantization.BIT: f"bit[{storage_dim}]",
             }[self.quantization]
 
-            self.conn.execute(
-                create_vec_table_sql(vec_type, self.distance_strategy.value)
-            )
+            # Custom SQL creation with dynamic table name
+            sql = f"CREATE VIRTUAL TABLE {self._vec_table_name} USING vec0(embedding {vec_type}"
+            if (
+                self.distance_strategy
+                and not vec_type.startswith("bit")
+                and self.distance_strategy != DistanceStrategy.COSINE
+            ):
+                # Note: sqlite-vec defaults to cosine/l2 depending on usage, but we can enforce metric in table def
+                # Actually, sqlite-vec 0.1.1+ supports distance_metric param
+                sql += f" distance_metric={self.distance_strategy.value}"
+            sql += ")"
+            self.conn.execute(sql)
 
-    # ------------------------------------------------------------------ #
-    # Filtering helpers
-    # ------------------------------------------------------------------ #
     def _build_filter_clause(
-        self, filter_dict: dict[str, Any] | None
+        self, filter_dict: dict[str, Any] | None, metadata_column: str = "metadata"
     ) -> tuple[str, list[Any]]:
         if not filter_dict:
             return "", []
-
         clauses = []
         params = []
         for key, value in filter_dict.items():
             json_path = f"$.{key}"
             if isinstance(value, (int, float)):
-                clauses.append("json_extract(metadata, ?) = ?")
+                clauses.append(f"json_extract({metadata_column}, ?) = ?")
                 params.extend([json_path, value])
             elif isinstance(value, str):
-                clauses.append("json_extract(metadata, ?) LIKE ?")
+                clauses.append(f"json_extract({metadata_column}, ?) LIKE ?")
                 params.extend([json_path, f"%{value}%"])
             elif isinstance(value, list):
                 placeholders = ",".join("?" for _ in value)
-                clauses.append(f"json_extract(metadata, ?) IN ({placeholders})")
+                clauses.append(
+                    f"json_extract({metadata_column}, ?) IN ({placeholders})"
+                )
                 params.extend([json_path] + value)
             else:
                 raise ValueError(f"Unsupported filter value type for {key}")
         where = " AND ".join(clauses)
         return f"AND ({where})" if where else "", params
 
-    # ------------------------------------------------------------------ #
-    # Public API
-    # ------------------------------------------------------------------ #
     def add_texts(
         self,
         texts: Sequence[str],
@@ -328,22 +357,9 @@ class VectorDB:
         embeddings: Sequence[Sequence[float]] | None = None,
         ids: Sequence[int | None] | None = None,
     ) -> list[int]:
-        """
-        Add texts with optional pre-computed embeddings.
-
-        Args:
-            texts: List of text strings to add.
-            metadatas: Optional list of metadata dicts for each text.
-            embeddings: Optional list of pre-computed embedding vectors.
-            ids: Optional list of integer IDs. If None, auto-incrementing IDs are generated.
-
-        Returns:
-            List of assigned integer IDs.
-        """
         if not texts:
             return []
 
-        # If embeddings are not provided, we need to generate them.
         embed_func = None
         if embeddings is None:
             try:
@@ -361,7 +377,6 @@ class VectorDB:
         n_total = len(texts)
         batch_size = config.EMBEDDING_BATCH_SIZE
 
-        # Prepare iterables
         metas_it = metadatas if metadatas else ({} for _ in range(n_total))
         ids_it = ids if ids else (None for _ in range(n_total))
 
@@ -372,11 +387,10 @@ class VectorDB:
             combined = zip(texts, metas_it, ids_it)
 
         for batch in _batched(combined, batch_size):
-            # Unzip
             unzipped = list(zip(*batch))
-            batch_texts = unzipped[0]
-            batch_metadatas = unzipped[1]
-            batch_ids = unzipped[2]
+            batch_texts = list(unzipped[0])
+            batch_metadatas = list(unzipped[1])
+            batch_ids = list(unzipped[2])
 
             batch_embeddings: Sequence[float] | Sequence[list[float]] | Any
             if embeddings:
@@ -385,7 +399,6 @@ class VectorDB:
                 assert embed_func is not None
                 batch_embeddings = embed_func(list(batch_texts))
 
-            # Ensure table exists (idempotent check)
             if self._dim is None:
                 first_emb = batch_embeddings[0]
                 if isinstance(first_emb, (list, tuple)):
@@ -408,7 +421,6 @@ class VectorDB:
                         f"Dimension mismatch: existing {self._dim}, got {first_dim}"
                     )
 
-            # Normalize for cosine before quantization
             emb_np = np.array(batch_embeddings, dtype=np.float32)
             if self.distance_strategy == DistanceStrategy.COSINE:
                 norms = np.linalg.norm(emb_np, axis=1, keepdims=True)
@@ -421,7 +433,6 @@ class VectorDB:
                 rows.append((uid, txt, json.dumps(meta)))
 
             with self.conn:
-                # Insert main table
                 self.conn.executemany(
                     f"""
                     INSERT INTO {self._table_name}(id, text, metadata)
@@ -432,7 +443,6 @@ class VectorDB:
                     """,
                     rows,
                 )
-                # Sync vec_index with correct rowids
                 batch_real_ids = [
                     r[0]
                     for r in self.conn.execute(
@@ -440,7 +450,7 @@ class VectorDB:
                         (len(batch_texts),),
                     )
                 ]
-                batch_real_ids.reverse()  # Align with input order
+                batch_real_ids.reverse()
 
                 real_vec_rows = [
                     (real_id, ser) for real_id, ser in zip(batch_real_ids, serialized)
@@ -452,41 +462,30 @@ class VectorDB:
                 elif self.quantization == Quantization.BIT:
                     insert_placeholder = "vec_bit(?)"
 
-                # Delete existing rows in vec_index to handle upserts
                 placeholders = ",".join("?" for _ in batch_real_ids)
                 self.conn.execute(
-                    f"DELETE FROM vec_index WHERE rowid IN ({placeholders})",
+                    f"DELETE FROM {self._vec_table_name} WHERE rowid IN ({placeholders})",
                     tuple(batch_real_ids),
                 )
 
                 self.conn.executemany(
-                    f"INSERT INTO vec_index(rowid, embedding) VALUES (?, {insert_placeholder})",
+                    f"INSERT INTO {self._vec_table_name}(rowid, embedding) VALUES (?, {insert_placeholder})",
                     real_vec_rows,
                 )
 
+                self._upsert_fts_rows(batch_real_ids, batch_texts)
                 all_ids.extend(batch_real_ids)
 
         return all_ids
 
-    def similarity_search(
+    def _vector_search_candidates(
         self,
         query: str | Sequence[float],
-        k: int = 5,
-        filter: dict[str, Any] | None = None,
-    ) -> list[tuple[Document, float]]:
-        """
-        Return top-k documents with distances.
-
-        Args:
-            query: Text string (requires embedding model) or vector.
-            k: Number of results to return.
-            filter: Metadata filter dict (e.g., {"category": "fruit"}).
-
-        Returns:
-            List of (Document, distance) tuples.
-        """
+        k: int,
+        filter: dict[str, Any] | None,
+    ) -> list[tuple[int, float]]:
         if self._dim is None:
-            return []  # empty collection
+            return []
 
         if isinstance(query, str):
             try:
@@ -500,6 +499,7 @@ class VectorDB:
                 ) from e
         else:
             query_vec = np.array(query, dtype=np.float32)
+
         if len(query_vec) != self._dim:
             raise ValueError(
                 f"Query dim {len(query_vec)} != collection dim {self._dim}"
@@ -510,7 +510,9 @@ class VectorDB:
 
         blob = _serialize_vector(query_vec, self.quantization)
 
-        filter_clause, filter_params = self._build_filter_clause(filter)
+        filter_clause, filter_params = self._build_filter_clause(
+            filter, metadata_column="ti.metadata"
+        )
 
         match_placeholder = "?"
         if self.quantization == Quantization.INT8:
@@ -521,31 +523,134 @@ class VectorDB:
         try:
             sql = f"""
                 SELECT ti.id, distance
-                FROM vec_index vi
+                FROM {self._vec_table_name} vi
                 JOIN {self._table_name} ti ON vi.rowid = ti.id
                 WHERE embedding MATCH {match_placeholder}
                 AND k = ?
                 {filter_clause}
                 ORDER BY distance
             """
-            candidates = self.conn.execute(
+            rows = self.conn.execute(
                 sql, (blob,) + (k,) + tuple(filter_params)
             ).fetchall()
         except sqlite3.OperationalError:
-            # Fallback brute-force
-            bf_candidates = self._brute_force_search(query_vec, k, filter)
-            # Convert to expected format for results processing below
-            candidates = bf_candidates
+            rows = self._brute_force_search(query_vec, k, filter)
 
-        results = []
-        for cid, dist in candidates[:k]:
-            text, meta_json = self.conn.execute(
+        return [(int(cid), float(dist)) for cid, dist in rows[:k]]
+
+    def _hydrate_documents(
+        self, candidates: Sequence[tuple[int, float]]
+    ) -> list[tuple[Document, float]]:
+        results: list[tuple[Document, float]] = []
+        for cid, score in candidates:
+            row = self.conn.execute(
                 f"SELECT text, metadata FROM {self._table_name} WHERE id = ?", (cid,)
             ).fetchone()
+            if not row:
+                continue
+            text, meta_json = row
             meta = json.loads(meta_json) if meta_json else {}
-            results.append((Document(page_content=text, metadata=meta), float(dist)))
-
+            results.append((Document(page_content=text, metadata=meta), score))
         return results
+
+    def similarity_search(
+        self,
+        query: str | Sequence[float],
+        k: int = 5,
+        filter: dict[str, Any] | None = None,
+    ) -> list[tuple[Document, float]]:
+        candidates = self._vector_search_candidates(query, k, filter)
+        return self._hydrate_documents(candidates)
+
+    def _keyword_search_candidates(
+        self, query: str, k: int, filter: dict[str, Any] | None
+    ) -> list[tuple[int, float]]:
+        if not self._fts_enabled:
+            raise RuntimeError(
+                "keyword_search requires SQLite compiled with FTS5 support"
+            )
+        if not query.strip():
+            return []
+
+        filter_clause, filter_params = self._build_filter_clause(
+            filter, metadata_column="ti.metadata"
+        )
+
+        sql = f"""
+            SELECT ti.id, bm25({self._fts_table_name}) as score
+            FROM {self._fts_table_name} f
+            JOIN {self._table_name} ti ON ti.id = f.rowid
+            WHERE {self._fts_table_name} MATCH ?
+            {filter_clause}
+            ORDER BY score ASC
+            LIMIT ?
+        """
+        params = (query,) + tuple(filter_params) + (k,)
+        rows = self.conn.execute(sql, params).fetchall()
+        return [(int(row[0]), float(row[1])) for row in rows]
+
+    def keyword_search(
+        self, query: str, k: int = 5, filter: dict[str, Any] | None = None
+    ) -> list[tuple[Document, float]]:
+        candidates = self._keyword_search_candidates(query, k, filter)
+        return self._hydrate_documents(candidates)
+
+    def _reciprocal_rank_fusion(
+        self,
+        dense: Sequence[tuple[int, float]],
+        sparse: Sequence[tuple[int, float]],
+        rrf_k: int,
+    ) -> list[tuple[int, float]]:
+        rank_scores: dict[int, float] = {}
+
+        def _accumulate(items: Sequence[tuple[int, float]]):
+            for rank, (doc_id, _) in enumerate(items):
+                rank_scores[doc_id] = rank_scores.get(doc_id, 0.0) + 1.0 / (
+                    rrf_k + rank + 1
+                )
+
+        _accumulate(dense)
+        _accumulate(sparse)
+
+        fused = sorted(rank_scores.items(), key=lambda kv: kv[1], reverse=True)
+        return [(doc_id, score) for doc_id, score in fused]
+
+    def hybrid_search(
+        self,
+        query: str,
+        k: int = 5,
+        filter: dict[str, Any] | None = None,
+        *,
+        query_vector: Sequence[float] | None = None,
+        vector_k: int | None = None,
+        keyword_k: int | None = None,
+        rrf_k: int = 60,
+    ) -> list[tuple[Document, float]]:
+        if not self._fts_enabled:
+            raise RuntimeError(
+                "hybrid_search requires SQLite compiled with FTS5 support"
+            )
+
+        if not query.strip():
+            return []
+
+        dense_k = vector_k or max(k, 10)
+        sparse_k = keyword_k or max(k, 10)
+
+        vector_input: str | Sequence[float]
+        if query_vector is not None:
+            vector_input = query_vector
+        else:
+            vector_input = query
+
+        dense_candidates = self._vector_search_candidates(vector_input, dense_k, filter)
+        sparse_candidates = self._keyword_search_candidates(query, sparse_k, filter)
+
+        fused_candidates = self._reciprocal_rank_fusion(
+            dense_candidates, sparse_candidates, rrf_k
+        )
+
+        return self._hydrate_documents(fused_candidates[:k])
 
     def max_marginal_relevance_search(
         self,
@@ -554,30 +659,14 @@ class VectorDB:
         fetch_k: int = 20,
         filter: dict[str, Any] | None = None,
     ) -> list[Document]:
-        """
-        MMR search to diversify results.
-
-        Args:
-            query: Text string or vector.
-            k: Number of results to return.
-            fetch_k: Number of candidates to fetch before reranking.
-            filter: Metadata filter dict.
-
-        Returns:
-            List of selected Documents.
-        """
-        # First get top fetch_k candidates
         candidates_with_scores = self.similarity_search(query, k=fetch_k, filter=filter)
         candidates = [doc for doc, _ in candidates_with_scores]
 
         if len(candidates) <= k:
             return candidates
 
-        # MMR selection
         selected = []
         unselected = candidates.copy()
-
-        # Start with the most relevant document
         selected.append(unselected.pop(0))
 
         while len(selected) < k:
@@ -597,7 +686,6 @@ class VectorDB:
                 mmr_score = 0.5 * relevance - 0.5 * diversity
                 mmr_scores.append((mmr_score, candidate))
 
-            # Select the candidate with the highest MMR score
             mmr_scores.sort(key=lambda x: x[0], reverse=True)
             selected.append(mmr_scores[0][1])
             unselected.remove(mmr_scores[0][1])
@@ -610,12 +698,10 @@ class VectorDB:
         k: int,
         filter: dict[str, Any] | None,
     ) -> list[tuple[int, float]]:
-        """Perform brute-force search using NumPy when sqlite-vec is unavailable."""
-        # Use batched processing to avoid OOM
         batch_size = get_optimal_batch_size()
 
         try:
-            cursor = self.conn.execute("SELECT rowid, embedding FROM vec_index")
+            cursor = self.conn.execute(f"SELECT rowid, embedding FROM {self._vec_table_name}")
         except sqlite3.OperationalError:
             return []
 
@@ -627,7 +713,6 @@ class VectorDB:
 
             ids, blobs = zip(*batch)
 
-            # Fetch metadata only if needed for filtering
             metas = []
             if filter:
                 placeholders = ",".join("?" for _ in ids)
@@ -652,14 +737,12 @@ class VectorDB:
             elif self.distance_strategy == DistanceStrategy.L2:
                 distances = np.linalg.norm(vectors - query_vec, axis=1)
             elif self.distance_strategy == DistanceStrategy.L1:
-                # Manhattan distance: sum of absolute differences
                 distances = np.sum(np.abs(vectors - query_vec), axis=1)
             else:
                 raise ValueError(
                     f"Unsupported distance strategy: {self.distance_strategy}"
                 )
 
-            # Apply filter if any
             batch_candidates = []
             for _, (cid, dist, meta_json) in enumerate(zip(ids, distances, metas)):
                 if filter:
@@ -680,23 +763,20 @@ class VectorDB:
         return top_k_candidates
 
     def delete_by_ids(self, ids: Iterable[int]) -> None:
-        """
-        Delete documents by their integer IDs.
-
-        Args:
-            ids: Iterable of integer IDs to delete.
-        """
+        ids = list(ids)
         if not ids:
             return
         placeholders = ",".join("?" for _ in ids)
+        params = tuple(ids)
         with self.conn:
             self.conn.execute(
                 f"DELETE FROM {self._table_name} WHERE id IN ({placeholders})",
-                tuple(ids),
+                params,
             )
             self.conn.execute(
-                f"DELETE FROM vec_index WHERE rowid IN ({placeholders})", tuple(ids)
+                f"DELETE FROM {self._vec_table_name} WHERE rowid IN ({placeholders})", params
             )
+            self._delete_fts_rows(ids)
         self.conn.execute("VACUUM")
 
     def remove_texts(
@@ -704,26 +784,12 @@ class VectorDB:
         texts: Sequence[str] | None = None,
         filter: dict[str, Any] | None = None,
     ) -> int:
-        """
-        Remove texts by content or metadata filter. Part of CRUD operations.
-
-        Args:
-            texts: List of exact text strings to remove (optional).
-            filter: Metadata filter dict to remove matching documents (optional).
-
-        Returns:
-            Number of documents deleted.
-
-        Raises:
-            ValueError: If neither texts nor filter is provided.
-        """
         if texts is None and filter is None:
             raise ValueError("Must provide either texts or filter to remove")
 
         ids_to_delete: list[int] = []
 
         if texts:
-            # Find IDs by exact text match
             placeholders = ",".join("?" for _ in texts)
             rows = self.conn.execute(
                 f"SELECT id FROM {self._table_name} WHERE text IN ({placeholders})",
@@ -732,9 +798,7 @@ class VectorDB:
             ids_to_delete.extend(r[0] for r in rows)
 
         if filter:
-            # Find IDs by metadata filter
             filter_clause, filter_params = self._build_filter_clause(filter)
-            # Remove leading "AND"
             filter_clause = filter_clause.replace("AND ", "", 1)
             where_clause = f"WHERE {filter_clause}" if filter_clause else ""
             rows = self.conn.execute(
@@ -743,42 +807,99 @@ class VectorDB:
             ).fetchall()
             ids_to_delete.extend(r[0] for r in rows)
 
-        # Remove duplicates and delete
         unique_ids = list(set(ids_to_delete))
         if unique_ids:
             self.delete_by_ids(unique_ids)
 
         return len(unique_ids)
 
+
+class VectorDB:
+    """
+    Dead-simple local vector database powered by sqlite-vec.
+    One SQLite file = multiple collections. Chroma-style API with quantization.
+    """
+
+    def __init__(
+        self,
+        path: str | Path = ":memory:",
+        distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
+        quantization: Quantization = Quantization.FLOAT,
+    ):
+        self.path = str(path)
+        self.distance_strategy = distance_strategy
+        self.quantization = quantization
+
+        self.conn = sqlite3.connect(self.path, check_same_thread=False)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.enable_load_extension(True)
+        try:
+            sqlite_vec.load(self.conn)
+            self._extension_available = True
+        except sqlite3.OperationalError:
+            self._extension_available = False
+
+        self.conn.enable_load_extension(False)
+
+    def collection(
+        self,
+        name: str,
+        distance_strategy: DistanceStrategy | None = None,
+        quantization: Quantization | None = None,
+    ) -> VectorCollection:
+        """
+        Get or create a named collection.
+
+        Args:
+            name: Collection name (alphanumeric + underscores).
+            distance_strategy: Override default distance strategy.
+            quantization: Override default quantization.
+
+        Returns:
+            VectorCollection instance.
+        """
+        return VectorCollection(
+            self.conn,
+            name,
+            distance_strategy or self.distance_strategy,
+            quantization or self.quantization,
+        )
+
     # ------------------------------------------------------------------ #
     # Integrations
     # ------------------------------------------------------------------ #
     def as_langchain(
-        self, embeddings: Embeddings | None = None
+        self, embeddings: Embeddings | None = None, collection_name: str = "default"
     ) -> TinyVecDBVectorStore:
         """
         Return a LangChain-compatible vector store interface.
 
         Args:
             embeddings: LangChain Embeddings model (optional).
+            collection_name: Name of the collection to use.
 
         Returns:
             TinyVecDBVectorStore instance.
         """
         from .integrations.langchain import TinyVecDBVectorStore
 
-        return TinyVecDBVectorStore(db_path=self.path, embedding=embeddings)
+        return TinyVecDBVectorStore(
+            db_path=self.path, embedding=embeddings, collection_name=collection_name
+        )
 
-    def as_llama_index(self) -> TinyVecDBLlamaStore:
+    def as_llama_index(self, collection_name: str = "default") -> TinyVecDBLlamaStore:
         """
         Return a LlamaIndex-compatible vector store interface.
+
+        Args:
+            collection_name: Name of the collection to use.
 
         Returns:
             TinyVecDBLlamaStore instance.
         """
         from .integrations.llamaindex import TinyVecDBLlamaStore
 
-        return TinyVecDBLlamaStore(db_path=self.path)
+        return TinyVecDBLlamaStore(db_path=self.path, collection_name=collection_name)
 
     # ------------------------------------------------------------------ #
     # Convenience

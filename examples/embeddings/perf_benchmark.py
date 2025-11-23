@@ -44,6 +44,7 @@ def benchmark_config(
     try:
         # Initialize database
         db = VectorDB(str(db_path), quantization=quantization)
+        collection = db.collection("default")
 
         # Generate random normalized vectors
         print(f"  Generating {vectors:,} random {dimensions}d vectors...")
@@ -55,7 +56,7 @@ def benchmark_config(
         texts = [f"document_{i}" for i in range(vectors)]
 
         insert_start = time.perf_counter()
-        db.add_texts(texts, embeddings=embeddings.tolist())
+        collection.add_texts(texts, embeddings=embeddings.tolist())
         insert_time = time.perf_counter() - insert_start
         insert_speed = vectors / insert_time if insert_time > 0 else 0
 
@@ -65,6 +66,7 @@ def benchmark_config(
 
         # Reopen for queries
         db = VectorDB(str(db_path), quantization=quantization)
+        collection = db.collection("default")
 
         # Generate random query vector
         query = np.random.randn(dimensions).astype(np.float32)
@@ -72,14 +74,14 @@ def benchmark_config(
         query_list = query.tolist()
 
         # Warm up
-        db.similarity_search(query_list, k=10)
+        collection.similarity_search(query_list, k=10)
 
         # Benchmark queries
         print(f"  Running {iterations} query iterations...")
         query_times = []
         for _ in range(iterations):
             query_start = time.perf_counter()
-            _ = db.similarity_search(query_list, k=10)
+            _ = collection.similarity_search(query_list, k=10)
             query_times.append(
                 (time.perf_counter() - query_start) * 1000
             )  # Convert to ms

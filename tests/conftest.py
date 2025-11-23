@@ -16,6 +16,7 @@ def populated_db():
         quantization=Quantization.FLOAT,
         distance_strategy=DistanceStrategy.COSINE,
     )
+    collection = db.collection("default")
     texts = ["apple is red", "banana is yellow", "orange is orange", "grape is purple"]
     embeddings = np.array(
         [
@@ -32,7 +33,7 @@ def populated_db():
         {"color": "orange", "likes": 15},
         {"color": "purple", "likes": 5},
     ]
-    db.add_texts(texts, embeddings=embeddings.tolist(), metadatas=metadatas)
+    collection.add_texts(texts, embeddings=embeddings.tolist(), metadatas=metadatas)
     return db
 
 

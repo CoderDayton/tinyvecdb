@@ -30,8 +30,8 @@ def test_llamaindex_query(tmp_path):
     mock_doc.page_content = "res"
     mock_doc.metadata = {"node_content": "{}"}
 
-    with patch.object(store, "_db") as mock_db:
-        mock_db.similarity_search.return_value = [(mock_doc, 0.1)]
+    with patch.object(store, "_collection") as mock_col:
+        mock_col.similarity_search.return_value = [(mock_doc, 0.1)]
 
         query = VectorStoreQuery(query_embedding=[0.1] * 384, similarity_top_k=1)
         result = store.query(query)
@@ -65,12 +65,12 @@ def test_llamaindex_add_handles_missing_embeddings(tmp_path):
     node_without_embedding.embedding = None
     node_without_embedding.node_id = "node-2"
 
-    with patch.object(store, "_db") as mock_db:
-        mock_db.add_texts.return_value = [1, 2]
+    with patch.object(store, "_collection") as mock_col:
+        mock_col.add_texts.return_value = [1, 2]
         node_ids = store.add([node_with_embedding, node_without_embedding])
 
     assert node_ids == ["node-1", "node-2"]
-    args, _ = mock_db.add_texts.call_args
+    args, _ = mock_col.add_texts.call_args
     assert args[2] is None  # embeddings should be None when any node lacks embeddings
 
 

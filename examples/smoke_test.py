@@ -2,6 +2,7 @@
 from tinyvecdb import VectorDB
 
 db = VectorDB(":memory:")
+collection = db.collection("smoke_test")
 
 embeddings = [
     [0.1, 0.2, 0.9],  # apple
@@ -9,19 +10,19 @@ embeddings = [
     [0.9, 0.8, 0.1],  # orange
 ]
 
-db.add_texts(
+collection.add_texts(
     texts=["apple", "banana", "orange"],
     embeddings=embeddings,
     metadatas=[{"type": "fruit"}, {"type": "fruit"}, {"type": "fruit"}],
 )
 
-results = db.similarity_search([0.95, 0.95, 0.95], k=2)
+results = collection.similarity_search([0.95, 0.95, 0.95], k=2)
 
 for doc, score in results:
     print(f"{score:.4f} → {doc.page_content} {doc.metadata}")
 
 # With filter
-results_filtered = db.similarity_search(
+results_filtered = collection.similarity_search(
     [0.95, 0.95, 0.95], k=2, filter={"type": "fruit"}
 )
 print("\nFiltered:")

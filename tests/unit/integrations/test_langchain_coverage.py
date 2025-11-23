@@ -49,8 +49,8 @@ def test_langchain_similarity_search_with_score_returns_scores(tmp_path):
 
     mock_doc = SimpleNamespace(page_content="content", metadata={"source": "unit"})
 
-    with patch.object(store, "_db") as mock_db:
-        mock_db.similarity_search.return_value = [(mock_doc, 0.25)]
+    with patch.object(store, "_collection") as mock_col:
+        mock_col.similarity_search.return_value = [(mock_doc, 0.25)]
 
         results = store.similarity_search_with_score("query", k=1)
 
@@ -59,7 +59,7 @@ def test_langchain_similarity_search_with_score_returns_scores(tmp_path):
     assert doc.page_content == "content"
     assert score == 0.25
     mock_embedding.embed_query.assert_called_once_with("query")
-    mock_db.similarity_search.assert_called_once_with(query=[0.5] * 3, k=1, filter=None)
+    mock_col.similarity_search.assert_called_once_with(query=[0.5] * 3, k=1, filter=None)
 
 
 def test_langchain_mmr_requires_embedding(tmp_path):

@@ -41,10 +41,11 @@ def test_get_optimal_batch_size_arm_many_cores_returns_16():
 def test_ensure_virtual_table_dimension_mismatch(tmp_path):
     """_ensure_virtual_table should reject mismatched dims once set."""
     db = VectorDB(str(tmp_path / "ensure_dim.db"))
-    db._dim = 3
+    collection = db.collection("default")
+    collection._dim = 3
 
     with pytest.raises(ValueError):
-        db._ensure_virtual_table(2)
+        collection._ensure_virtual_table(2)
 
     db.close()
 
@@ -59,22 +60,24 @@ def test_add_texts_uses_local_embedder_numpy(tmp_path):
 
     with patch("tinyvecdb.embeddings.models.embed_texts", side_effect=embed_returns):
         db = VectorDB(str(db_path))
-        first_ids = db.add_texts(["alpha"], metadatas=[{"idx": 1}])
-        second_ids = db.add_texts(["beta"], metadatas=[{"idx": 2}])
+        collection = db.collection("default")
+        first_ids = collection.add_texts(["alpha"], metadatas=[{"idx": 1}])
+        second_ids = collection.add_texts(["beta"], metadatas=[{"idx": 2}])
 
     assert len(first_ids) == 1
     assert len(second_ids) == 1
-    assert db._dim == 3
+    assert collection._dim == 3
     db.close()
 
 
 def test_similarity_search_bruteforce_filter(tmp_path):
     """Force sqlite-vec failure to exercise brute-force fallback with filters."""
     db = VectorDB(str(tmp_path / "bf.db"), quantization=Quantization.FLOAT)
+    collection = db.collection("default")
     texts = ["tech doc", "sports doc"]
     metas = [{"category": "news", "tag": "tech"}, {"category": "news", "tag": "sports"}]
     embeds = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
-    db.add_texts(texts, metadatas=metas, embeddings=embeds)
+    collection.add_texts(texts, metadatas=metas, embeddings=embeds)
 
     filter_dict = {"category": "news", "tag": ["tech", "ai"]}
 
@@ -101,9 +104,13 @@ def test_similarity_search_bruteforce_filter(tmp_path):
             yield rows[i : i + step]
 
     db.conn = cast(sqlite3.Connection, FailingConnection(db.conn))
+    # Re-initialize collection to use the mocked connection if needed, 
+    # but collection.conn is a reference to db.conn, so it should be fine if we updated db.conn in place.
+    # However, db.conn was replaced with a wrapper. We need to update collection.conn too.
+    collection.conn = db.conn
 
     with patch("tinyvecdb.core._batched", new=fake_batched):
-        results = db.similarity_search([1.0, 0.0, 0.0], k=2, filter=filter_dict)
+        results = collection.similarity_search([1.0, 0.0, 0.0], k=2, filter=filter_dict)
 
     assert len(results) == 1
     assert results[0][0].metadata["tag"] == "tech"
@@ -113,27 +120,31 @@ def test_similarity_search_bruteforce_filter(tmp_path):
 def test_bruteforce_invalid_distance_strategy(tmp_path):
     """_brute_force_search should error on unsupported distance metrics."""
     db = VectorDB(str(tmp_path / "bf_invalid.db"))
-    db.add_texts(["only"], embeddings=[[1.0, 0.0, 0.0]])
+    collection = db.collection("default")
+    collection.add_texts(["only"], embeddings=[[1.0, 0.0, 0.0]])
     db.distance_strategy = "invalid"  # type: ignore[assignment]
+    collection.distance_strategy = "invalid"
 
     query_vec = np.array([1.0, 0.0, 0.0], dtype=np.float32)
     with pytest.raises(ValueError):
-        db._brute_force_search(query_vec, 1, None)
+        collection._brute_force_search(query_vec, 1, None)
     db.close()
 
 
 def test_remove_texts_requires_criteria(tmp_path):
     """remove_texts should demand either texts or filters."""
     db = VectorDB(str(tmp_path / "remove_none.db"))
+    collection = db.collection("default")
     with pytest.raises(ValueError):
-        db.remove_texts()
+        collection.remove_texts()
     db.close()
 
 
 def test_remove_texts_combines_text_and_filter(tmp_path):
     """Removal should deduplicate IDs gathered from texts and filters."""
     db = VectorDB(str(tmp_path / "remove.db"))
-    db.add_texts(
+    collection = db.collection("default")
+    collection.add_texts(
         ["dup", "filter", "keep"],
         metadatas=[{"topic": "target"}, {"topic": "filter"}, {"topic": "keep"}],
         embeddings=[
@@ -143,11 +154,11 @@ def test_remove_texts_combines_text_and_filter(tmp_path):
         ],
     )
 
-    removed = db.remove_texts(texts=["dup"], filter={"topic": "filter"})
+    removed = collection.remove_texts(texts=["dup"], filter={"topic": "filter"})
     assert removed == 2
 
     remaining = db.conn.execute(
-        f"SELECT text FROM {db._table_name} ORDER BY id"
+        f"SELECT text FROM {collection._table_name} ORDER BY id"
     ).fetchall()
     assert [row[0] for row in remaining] == ["keep"]
     db.close()

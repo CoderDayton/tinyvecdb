@@ -18,7 +18,8 @@ def get_db_size(path):
 
 def bench(quant):
     db = VectorDB(f"bench_{quant}.db", quantization=quant)
-    db.add_texts([f"text_{i}" for i in range(N)], embeddings=vectors.tolist())
+    collection = db.collection("default")
+    collection.add_texts([f"text_{i}" for i in range(N)], embeddings=vectors.tolist())
     
     # Force checkpoint to clean up WAL and get true size
     db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -27,11 +28,13 @@ def bench(quant):
 
     t0 = time.time()
     for _ in range(100):
-        db.similarity_search(vectors[0], k=10)
+        collection.similarity_search(vectors[0], k=10)
     ms = (time.time() - t0) / 100 * 1000
 
     print(f"{quant}: {size_mb:.1f} MB, {ms:.2f} ms/query")
-    os.remove(db.path)
+    db.close()
+    if os.path.exists(db.path):
+        os.remove(db.path)
 
 
 bench(Quantization.FLOAT)  # ~15 MB

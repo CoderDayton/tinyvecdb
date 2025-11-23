@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
+import threading
 
 from ..config import config
 
@@ -13,6 +14,8 @@ else:  # Fallback to Any to keep runtime import optional
 
 DEFAULT_MODEL = config.EMBEDDING_MODEL
 CACHE_DIR = Path(os.path.expanduser(config.EMBEDDING_CACHE_DIR))
+_model_lock = threading.Lock()
+_loaded_models: dict[str, "SentenceTransformerType"] = {}
 
 
 def _load_sentence_transformer_cls() -> type[SentenceTransformerType]:
@@ -36,20 +39,15 @@ def _load_snapshot_download():
     return snapshot_download
 
 
-def load_default_model() -> SentenceTransformerType:
-    """
-    Load the embedding model specified in the config.
-
-    Returns:
-        Loaded SentenceTransformer model.
-    """
+def load_model(repo_id: str) -> SentenceTransformerType:
+    """Load (and cache on disk) a SentenceTransformer for the given repo id."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     snapshot = _load_snapshot_download()
     st_cls = _load_sentence_transformer_cls()
 
     model_path = snapshot(
-        repo_id=DEFAULT_MODEL,
+        repo_id=repo_id,
         cache_dir=CACHE_DIR,
         local_files_only=False,  # auto-download first time
     )
@@ -68,38 +66,45 @@ def load_default_model() -> SentenceTransformerType:
     return model
 
 
-# Global singleton
-_default_model: SentenceTransformerType | None = None
+def load_default_model() -> SentenceTransformerType:
+    """Backward-compatible helper for loading the configured default model."""
+    return load_model(DEFAULT_MODEL)
 
 
-def get_embedder() -> SentenceTransformerType:
-    """
-    Get the global singleton embedding model.
-
-    Returns:
-        SentenceTransformer instance.
-    """
-    global _default_model
-    if _default_model is None:
-        _default_model = load_default_model()
-    return _default_model
+def get_embedder(model_id: str | None = None) -> SentenceTransformerType:
+    """Return a cached embedder for the requested model (defaults to config value)."""
+    repo_id = model_id or DEFAULT_MODEL
+    with _model_lock:
+        model = _loaded_models.get(repo_id)
+        if model is None:
+            model = load_model(repo_id)
+            _loaded_models[repo_id] = model
+    return model
 
 
-def embed_texts(texts: list[str]) -> list[list[float]]:
+def embed_texts(
+    texts: list[str], *, model_id: str | None = None, batch_size: int | None = None
+) -> list[list[float]]:
     """
     Embed a list of texts using the default model.
 
     Args:
         texts: List of strings to embed.
+        model_id: Optional repo id / alias override.
+        batch_size: Optional override for encode batch size.
 
     Returns:
         List of embedding vectors (list of floats).
     """
-    model = get_embedder()
+    if not texts:
+        return []
+
+    model = get_embedder(model_id)
+    effective_batch_size = batch_size or config.EMBEDDING_BATCH_SIZE
     embeddings = model.encode(
         texts,
         normalize_embeddings=True,
-        batch_size=config.EMBEDDING_BATCH_SIZE,
+        batch_size=effective_batch_size,
         show_progress_bar=False,
     )
     return embeddings.tolist()

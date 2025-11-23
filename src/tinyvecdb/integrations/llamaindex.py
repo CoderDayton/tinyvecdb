@@ -1,5 +1,5 @@
 # src/tinyvecdb/integrations/llamaindex.py
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from collections.abc import Sequence
 
 from llama_index.core.vector_stores import (
@@ -7,9 +7,16 @@ from llama_index.core.vector_stores import (
     VectorStoreQueryResult,
 )
 from llama_index.core.schema import TextNode, BaseNode
-from llama_index.core.vector_stores.types import BasePydanticVectorStore, MetadataFilters
+from llama_index.core.vector_stores.types import (
+    BasePydanticVectorStore,
+    MetadataFilters,
+    VectorStoreQueryMode,
+)
 
 from tinyvecdb.core import VectorDB  # our core
+
+if TYPE_CHECKING:
+    from tinyvecdb.types import Document
 
 
 class TinyVecDBLlamaStore(BasePydanticVectorStore):
@@ -18,10 +25,16 @@ class TinyVecDBLlamaStore(BasePydanticVectorStore):
     stores_text: bool = True
     is_embedding_query: bool = True
 
-    def __init__(self, db_path: str = ":memory:", **kwargs: Any):
+    def __init__(
+        self,
+        db_path: str = ":memory:",
+        collection_name: str = "default",
+        **kwargs: Any,
+    ):
         # Pass stores_text as a literal value, not self.stores_text
         super().__init__(stores_text=True)
         self._db = VectorDB(path=db_path, **kwargs)
+        self._collection = self._db.collection(collection_name)
         # Map internal DB IDs to node IDs
         self._id_map: dict[int, str] = {}
 
@@ -65,7 +78,7 @@ class TinyVecDBLlamaStore(BasePydanticVectorStore):
                 embeddings = emb_list
 
         # Add to DB and get internal IDs
-        internal_ids = self._db.add_texts(texts, metadatas, embeddings)
+        internal_ids = self._collection.add_texts(texts, metadatas, embeddings)
 
         # Track mapping from internal ID to node ID
         node_ids = []
@@ -93,7 +106,7 @@ class TinyVecDBLlamaStore(BasePydanticVectorStore):
                 break
 
         if internal_id is not None:
-            self._db.delete_by_ids([internal_id])
+            self._collection.delete_by_ids([internal_id])
             del self._id_map[internal_id]
 
     def delete_nodes(
@@ -114,78 +127,94 @@ class TinyVecDBLlamaStore(BasePydanticVectorStore):
             for node_id in node_ids:
                 self.delete(node_id)
 
+    def _filters_to_dict(
+        self, filters: MetadataFilters | None
+    ) -> dict[str, Any] | None:
+        if filters is None:
+            return None
+        result: dict[str, Any] = {}
+        if hasattr(filters, "filters"):
+            for filter_item in filters.filters:  # type: ignore[attr-defined]
+                if hasattr(filter_item, "key") and hasattr(filter_item, "value"):
+                    key = getattr(filter_item, "key")
+                    value = getattr(filter_item, "value")
+                    result[key] = value
+        return result or None
+
+    def _build_query_result(
+        self,
+        docs_with_scores: list[tuple["Document", float]],
+        score_transform,
+    ) -> VectorStoreQueryResult:
+        nodes: list[TextNode] = []
+        similarities: list[float] = []
+        ids: list[str] = []
+
+        for tiny_doc, score in docs_with_scores:
+            node_id = str(hash(tiny_doc.page_content))
+            node = TextNode(
+                text=tiny_doc.page_content,
+                metadata=tiny_doc.metadata or {},
+                id_=node_id,
+                relationships={},
+            )
+            nodes.append(node)
+            similarities.append(score_transform(score))
+            ids.append(node_id)
+
+        return VectorStoreQueryResult(nodes=nodes, similarities=similarities, ids=ids)
+
     def query(self, query: VectorStoreQuery, **kwargs: Any) -> VectorStoreQueryResult:
-        """
-        Query with embedding or str (auto-embeds if str).
+        """Support dense, keyword, or hybrid lookups based on the requested mode."""
 
-        Args:
-            query: VectorStoreQuery object.
-            **kwargs: Unused.
+        filter_dict = self._filters_to_dict(query.filters)
+        mode = getattr(query, "mode", VectorStoreQueryMode.DEFAULT)
+        mode_value = getattr(mode, "value", mode)
+        normalized_mode = str(mode_value).lower() if mode_value else "default"
 
-        Returns:
-            VectorStoreQueryResult.
-        """
-        # Get query embedding - prefer embedding over string
+        keyword_modes = {
+            VectorStoreQueryMode.SPARSE.value,
+            VectorStoreQueryMode.TEXT_SEARCH.value,
+        }
+        hybrid_modes = {
+            VectorStoreQueryMode.HYBRID.value,
+            VectorStoreQueryMode.SEMANTIC_HYBRID.value,
+        }
+
+        if normalized_mode in keyword_modes:
+            if not query.query_str:
+                raise ValueError("Keyword search requires query_str")
+            results = self._collection.keyword_search(
+                query.query_str,
+                k=query.similarity_top_k,
+                filter=filter_dict,
+            )
+            return self._build_query_result(results, lambda score: 1.0 / (1.0 + score))
+
+        if normalized_mode in hybrid_modes:
+            if not query.query_str:
+                raise ValueError("Hybrid search requires query_str")
+            results = self._collection.hybrid_search(
+                query.query_str,
+                k=query.similarity_top_k,
+                filter=filter_dict,
+                query_vector=query.query_embedding,
+            )
+            return self._build_query_result(results, lambda score: float(score))
+
+        # Fallback to dense/vector search
         query_emb = query.query_embedding
-
         if query_emb is None:
             if query.query_str:
-                # Try to use string query (requires embeddings in VectorDB)
                 query_input: str | list[float] = query.query_str
             else:
                 raise ValueError("Either query_embedding or query_str must be provided")
         else:
             query_input = query_emb
 
-        # Convert MetadataFilters to simple dict if present
-        filter_dict = None
-        if query.filters is not None:
-            # Convert LlamaIndex MetadataFilters to simple dict
-            # For now, extract exact matches from filters
-            filter_dict = {}
-            if hasattr(query.filters, "filters"):
-                for filter_item in query.filters.filters:
-                    # Handle MetadataFilter objects with key and value attributes
-                    # Use getattr with type ignore to handle dynamic attributes
-                    if hasattr(filter_item, "key") and hasattr(filter_item, "value"):
-                        key = getattr(filter_item, "key")
-                        value = getattr(filter_item, "value")
-                        filter_dict[key] = value
-
-        # Perform search
-        results = self._db.similarity_search(
+        results = self._collection.similarity_search(
             query=query_input,
             k=query.similarity_top_k,
             filter=filter_dict,
         )
-
-        # Build response - nodes should be BaseNode objects, not NodeWithScore
-        nodes = []
-        similarities = []
-        ids = []
-
-        for tiny_doc, score in results:
-            # Generate a stable node ID
-            node_id = str(hash(tiny_doc.page_content))
-
-            # Create TextNode with all required properties
-            node = TextNode(
-                text=tiny_doc.page_content,
-                metadata=tiny_doc.metadata or {},
-                id_=node_id,
-                relationships={},  # Initialize empty relationships dict
-            )
-
-            # Convert distance to similarity (for cosine: similarity = 1 - distance)
-            similarity = 1 - score
-
-            # Return the node itself, not NodeWithScore - LlamaIndex will wrap it later
-            nodes.append(node)
-            similarities.append(similarity)
-            ids.append(node_id)
-
-        return VectorStoreQueryResult(
-            nodes=nodes,
-            similarities=similarities,
-            ids=ids,
-        )
+        return self._build_query_result(results, lambda distance: 1 - distance)

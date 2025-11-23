@@ -15,10 +15,12 @@ class TinyVecDBVectorStore(VectorStore):
         self,
         db_path: str = ":memory:",
         embedding: Embeddings | None = None,
+        collection_name: str = "default",
         **kwargs: Any,
     ):
         self.embedding = embedding  # LangChain expects this
         self._db = VectorDB(path=db_path, **kwargs)
+        self._collection = self._db.collection(collection_name)
 
     @classmethod
     def from_texts(
@@ -27,6 +29,7 @@ class TinyVecDBVectorStore(VectorStore):
         embedding: Embeddings,
         metadatas: list[dict] | None = None,
         db_path: str = ":memory:",
+        collection_name: str = "default",
         **kwargs: Any,
     ) -> "TinyVecDBVectorStore":
         """
@@ -37,12 +40,18 @@ class TinyVecDBVectorStore(VectorStore):
             embedding: LangChain Embeddings model.
             metadatas: Optional list of metadata dicts.
             db_path: Path to SQLite database.
+            collection_name: Name of the collection to use.
             **kwargs: Additional arguments for VectorDB.
 
         Returns:
             Initialized TinyVecDBVectorStore.
         """
-        store = cls(embedding=embedding, db_path=db_path, **kwargs)
+        store = cls(
+            embedding=embedding,
+            db_path=db_path,
+            collection_name=collection_name,
+            **kwargs,
+        )
         store.add_texts(texts, metadatas)
         return store
 
@@ -67,7 +76,7 @@ class TinyVecDBVectorStore(VectorStore):
         embeddings = None
         if self.embedding:
             embeddings = self.embedding.embed_documents(texts_list)
-        ids = self._db.add_texts(
+        ids = self._collection.add_texts(
             texts=texts_list,
             metadatas=metadatas,
             embeddings=embeddings,
@@ -96,7 +105,7 @@ class TinyVecDBVectorStore(VectorStore):
             query_vec = self.embedding.embed_query(query)
         else:
             raise ValueError("Embedding model required for text queries")
-        results = self._db.similarity_search(
+        results = self._collection.similarity_search(
             query=query_vec,
             k=k,
             filter=kwargs.get("filter"),
@@ -127,7 +136,7 @@ class TinyVecDBVectorStore(VectorStore):
             query_vec = self.embedding.embed_query(query)
         else:
             raise ValueError("Embedding model required")
-        results = self._db.similarity_search(
+        results = self._collection.similarity_search(
             query=query_vec,
             k=k,
             filter=kwargs.get("filter"),
@@ -150,7 +159,7 @@ class TinyVecDBVectorStore(VectorStore):
         """
         if ids:
             int_ids = [int(id_) for id_ in ids]
-            self._db.delete_by_ids(int_ids)
+            self._collection.delete_by_ids(int_ids)
 
     def max_marginal_relevance_search(
         self,
@@ -177,7 +186,7 @@ class TinyVecDBVectorStore(VectorStore):
             query_vec = self.embedding.embed_query(query)
         else:
             raise ValueError("Embedding model required for text queries")
-        results = self._db.max_marginal_relevance_search(
+        results = self._collection.max_marginal_relevance_search(
             query=query_vec,
             k=k,
             fetch_k=fetch_k,
@@ -186,6 +195,48 @@ class TinyVecDBVectorStore(VectorStore):
         return [
             LangChainDocument(page_content=doc.page_content, metadata=doc.metadata)
             for doc in results
+        ]
+
+    def keyword_search(
+        self,
+        query: str,
+        k: int = 4,
+        **kwargs: Any,
+    ) -> list[LangChainDocument]:
+        """Return BM25-ranked documents without requiring embeddings."""
+
+        results = self._collection.keyword_search(
+            query, k=k, filter=kwargs.get("filter")
+        )
+        return [
+            LangChainDocument(page_content=doc.page_content, metadata=doc.metadata)
+            for doc, _ in results
+        ]
+
+    def hybrid_search(
+        self,
+        query: str,
+        k: int = 4,
+        **kwargs: Any,
+    ) -> list[LangChainDocument]:
+        """Blend BM25 + vector rankings using Reciprocal Rank Fusion."""
+
+        query_vec = None
+        if self.embedding and hasattr(self.embedding, "embed_query"):
+            query_vec = self.embedding.embed_query(query)
+
+        results = self._collection.hybrid_search(
+            query,
+            k=k,
+            filter=kwargs.get("filter"),
+            query_vector=query_vec,
+            vector_k=kwargs.get("vector_k"),
+            keyword_k=kwargs.get("keyword_k"),
+            rrf_k=kwargs.get("rrf_k", 60),
+        )
+        return [
+            LangChainDocument(page_content=doc.page_content, metadata=doc.metadata)
+            for doc, _ in results
         ]
 
     # Stub async (wrap sync for now – add true async in v1)
