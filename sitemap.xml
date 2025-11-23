@@ -40,4 +40,16 @@
          <loc>https://coderdayton.github.io/SimpleVecDB/api/integrations/</loc>
          <lastmod>2025-11-23</lastmod>
     </url>
+    <url>
+         <loc>https://coderdayton.github.io/SimpleVecDB/api/engine/catalog/</loc>
+         <lastmod>2025-11-23</lastmod>
+    </url>
+    <url>
+         <loc>https://coderdayton.github.io/SimpleVecDB/api/engine/quantization/</loc>
+         <lastmod>2025-11-23</lastmod>
+    </url>
+    <url>
+         <loc>https://coderdayton.github.io/SimpleVecDB/api/engine/search/</loc>
+         <lastmod>2025-11-23</lastmod>
+    </url>
 </urlset>
