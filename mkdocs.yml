@@ -1,7 +1,7 @@
 site_name: SimpleVecDB Docs
-site_url: https://coderdayton.github.io/simplevecdb
+site_url: https://coderdayton.github.io/SimpleVecDB
 repo_url: https://github.com/coderdayton/simplevecdb
-repo_name: simplevecdb
+repo_name: SimpleVecDB
 
 theme:
   name: shadcn
@@ -34,16 +34,20 @@ plugins:
 
 nav:
   - Home: index.md
-  - API:
-      - VectorDB: api/core.md
-      - Embeddings: api/embeddings.md
-      - Integrations: api/integrations.md
-      - Configuration: api/config.md
   - Examples: examples.md
   - Benchmarks: benchmarks.md
   - Changelog: CHANGELOG.md
   - Contributing: CONTRIBUTING.md
   - Setup: ENV_SETUP.md
+  - API:
+      - VectorDB: api/core.md
+      - Embeddings: api/embeddings.md
+      - Integrations: api/integrations.md
+      - Configuration: api/config.md
+  - Engine:
+      - Catalog: api/engine/catalog.md
+      - Search: api/engine/search.md
+      - Quantization: api/engine/quantization.md
 
 markdown_extensions:
   - admonition

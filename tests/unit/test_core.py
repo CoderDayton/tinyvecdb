@@ -52,7 +52,7 @@ def test_add_with_metadata(populated_db):
     # Actually, let's fix the test to use collection("default") assuming fixture puts data there.
     # But if fixture uses db.add_texts, it will fail.
     # I need to check conftest.py later. For now, let's assume we use collection("default").
-    
+
     # Wait, I can't see conftest.py here. I should probably check it.
     # But let's update the test code first.
     collection = populated_db.collection("default")
@@ -87,15 +87,16 @@ def test_delete_by_ids(populated_db):
         f"SELECT COUNT(*) FROM {collection._table_name}"
     ).fetchone()[0]
     assert remaining == 2
-    vec_count = populated_db.conn.execute(f"SELECT COUNT(*) FROM {collection._vec_table_name}").fetchone()[
-        0
-    ]
+    vec_count = populated_db.conn.execute(
+        f"SELECT COUNT(*) FROM {collection._vec_table_name}"
+    ).fetchone()[0]
     assert vec_count == 2  # Ensure the virtual table row count matches the main table.
 
 
 def test_add_no_embeddings_raises(empty_db, monkeypatch):
     """Ensure ValueError is raised when no embeddings are provided and local embedder fails."""
     import sys
+
     collection = empty_db.collection("default")
 
     # Simulate module missing by setting it to None in sys.modules
@@ -134,25 +135,29 @@ def test_recover_dim(tmp_path):
 
 def test_dequantize_fallback():
     """Test dequantization logic directly."""
-    from simplevecdb.core import _serialize_vector, _dequantize_vector, Quantization
+    from simplevecdb.types import Quantization
+    from simplevecdb.engine.quantization import QuantizationStrategy
     import numpy as np
 
     vec = np.array([0.1, 0.5, -0.5], dtype=np.float32)
 
     # Float
-    blob = _serialize_vector(vec, Quantization.FLOAT)
-    out = _dequantize_vector(blob, 3, Quantization.FLOAT)
+    strategy = QuantizationStrategy(Quantization.FLOAT)
+    blob = strategy.serialize(vec)
+    out = strategy.deserialize(blob, 3)
     assert np.allclose(vec, out)
 
     # Int8
-    blob = _serialize_vector(vec, Quantization.INT8)
-    out = _dequantize_vector(blob, 3, Quantization.INT8)
+    strategy = QuantizationStrategy(Quantization.INT8)
+    blob = strategy.serialize(vec)
+    out = strategy.deserialize(blob, 3)
     # Precision loss expected
     assert np.allclose(vec, out, atol=0.01)
 
     # Bit
-    blob = _serialize_vector(vec, Quantization.BIT)
-    out = _dequantize_vector(blob, 3, Quantization.BIT)
+    strategy = QuantizationStrategy(Quantization.BIT)
+    blob = strategy.serialize(vec)
+    out = strategy.deserialize(blob, 3)
     # Binary: >0 -> 1, <=0 -> -1
     expected = np.array([1.0, 1.0, -1.0], dtype=np.float32)
     assert np.allclose(out, expected)
@@ -319,6 +324,7 @@ def test_distance_strategy_l1():
 def test_add_texts_batching(empty_db, monkeypatch):
     """Test that large inserts are batched correctly."""
     from simplevecdb import config
+
     collection = empty_db.collection("default")
 
     # Set small batch size for testing
@@ -354,10 +360,10 @@ def test_metadata_json_filtering(populated_db):
 
 def test_normalize_l2():
     """Test L2 normalization helper function."""
-    from simplevecdb.core import _normalize_l2
+    from simplevecdb.engine.quantization import normalize_l2
 
     vec = np.array([3.0, 4.0])
-    normalized = _normalize_l2(vec)
+    normalized = normalize_l2(vec)
 
     # Should have unit length
     assert np.isclose(np.linalg.norm(normalized), 1.0)
@@ -365,7 +371,7 @@ def test_normalize_l2():
 
     # Zero vector should remain zero
     zero_vec = np.array([0.0, 0.0])
-    assert np.allclose(_normalize_l2(zero_vec), zero_vec)
+    assert np.allclose(normalize_l2(zero_vec), zero_vec)
 
 
 def test_as_langchain(empty_db):
@@ -390,17 +396,16 @@ def test_dimension_mismatch_on_add(populated_db):
     """Test that adding vectors with different dimensions raises error."""
     collection = populated_db.collection("default")
     with pytest.raises(ValueError, match="Dimension mismatch"):
-        collection.add_texts(
-            ["new text"], embeddings=[[0.1, 0.2]]
-        )  # 2D instead of 4D
+        collection.add_texts(["new text"], embeddings=[[0.1, 0.2]])  # 2D instead of 4D
 
 
 def test_unsupported_quantization():
     """Test that invalid quantization mode raises error."""
-    from simplevecdb.core import _serialize_vector
+    from simplevecdb.engine.quantization import QuantizationStrategy
 
     with pytest.raises(ValueError, match="Unsupported quantization"):
-        _serialize_vector(np.array([0.1, 0.2]), ("invalid"))  # type: ignore
+        strategy = QuantizationStrategy("invalid")  # type: ignore
+        strategy.serialize(np.array([0.1, 0.2]))
 
 
 def test_delete_empty_list(populated_db):

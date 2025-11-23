@@ -26,3 +26,9 @@ class DistanceStrategy(StrEnum):
     COSINE = "cosine"
     L2 = "l2"  # euclidean
     L1 = "l1"  # manhattan
+
+
+class Quantization(StrEnum):
+    FLOAT = "float"
+    INT8 = "int8"
+    BIT = "bit"

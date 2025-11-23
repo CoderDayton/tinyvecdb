@@ -45,7 +45,7 @@ def test_ensure_virtual_table_dimension_mismatch(tmp_path):
     collection._dim = 3
 
     with pytest.raises(ValueError):
-        collection._ensure_virtual_table(2)
+        collection._catalog.ensure_virtual_table(2)
 
     db.close()
 
@@ -104,7 +104,7 @@ def test_similarity_search_bruteforce_filter(tmp_path):
             yield rows[i : i + step]
 
     db.conn = cast(sqlite3.Connection, FailingConnection(db.conn))
-    # Re-initialize collection to use the mocked connection if needed, 
+    # Re-initialize collection to use the mocked connection if needed,
     # but collection.conn is a reference to db.conn, so it should be fine if we updated db.conn in place.
     # However, db.conn was replaced with a wrapper. We need to update collection.conn too.
     collection.conn = db.conn
@@ -124,6 +124,7 @@ def test_bruteforce_invalid_distance_strategy(tmp_path):
     collection.add_texts(["only"], embeddings=[[1.0, 0.0, 0.0]])
     db.distance_strategy = "invalid"  # type: ignore[assignment]
     collection.distance_strategy = "invalid"
+    collection._search.distance_strategy = "invalid"  # type: ignore[assignment]
 
     query_vec = np.array([1.0, 0.0, 0.0], dtype=np.float32)
     with pytest.raises(ValueError):

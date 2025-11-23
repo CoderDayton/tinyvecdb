@@ -301,19 +301,17 @@ Contributions are welcome! Whether you're fixing bugs, improving documentation, 
 2. Check existing [Issues](https://github.com/coderdayton/simplevecdb/issues) and [Discussions](https://github.com/coderdayton/simplevecdb/discussions)
 3. Open a PR with clear description and tests
 
-**Need help?** Join the conversation in [GitHub Discussions](https://github.com/coderdayton/simplevecdb/discussions).
-
 ## Community & Support
 
 **Get Help:**
 
-- [GitHub Discussions](https://github.com/coderdayton/simplevecdb/discussions) — Q\&A and feature requests
+- [GitHub Discussions](https://github.com/coderdayton/simplevecdb/discussions) — Q&A and feature requests
 - [GitHub Issues](https://github.com/coderdayton/simplevecdb/issues) — Bug reports
 
 **Stay Updated:**
 
 - [GitHub Releases](https://github.com/coderdayton/simplevecdb/releases) — Changelog and updates
-- [Examples Gallery](https://coderdayton.github.io/simplevecdb/examples/) — Community-contributed notebooks
+- [Examples Gallery](examples.md) — Community-contributed notebooks
 
 ## Sponsors
 

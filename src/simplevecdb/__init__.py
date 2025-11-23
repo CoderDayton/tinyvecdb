@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from .types import Document, DistanceStrategy
-from .core import VectorDB, VectorCollection, Quantization, get_optimal_batch_size
+from .types import Document, DistanceStrategy, Quantization
+from .core import VectorDB, VectorCollection, get_optimal_batch_size
 from .config import config
 from .integrations.langchain import SimpleVecDBVectorStore
 from .integrations.llamaindex import SimpleVecDBLlamaStore
