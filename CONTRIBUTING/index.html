@@ -743,7 +743,7 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
 <span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="nx">integrations</span><span class="o">/</span>
 <span class="err">│</span><span class="w">       </span><span class="err">├──</span><span class="w"> </span><span class="nx">langchain</span><span class="p">.</span><span class="nx">py</span><span class="w">     </span><span class="err">#</span><span class="w"> </span><span class="nx">LangChain</span><span class="w"> </span><span class="nx">VectorStore</span><span class="w"> </span><span class="nx">wrapper</span>
 <span class="err">│</span><span class="w">       </span><span class="err">└──</span><span class="w"> </span><span class="nx">llamaindex</span><span class="p">.</span><span class="nx">py</span><span class="w">    </span><span class="err">#</span><span class="w"> </span><span class="nx">LlamaIndex</span><span class="w"> </span><span class="nx">VectorStore</span><span class="w"> </span><span class="nx">wrapper</span>
-<span class="err">├──</span><span class="w"> </span><span class="nx">tests</span><span class="o">/</span><span class="w">                   </span><span class="err">#</span><span class="w"> </span><span class="nx">Unitm</span><span class="w"> </span><span class="nx">integration</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="nx">performance</span><span class="w"> </span><span class="nx">tests</span>
+<span class="err">├──</span><span class="w"> </span><span class="nx">tests</span><span class="o">/</span><span class="w">                   </span><span class="err">#</span><span class="w"> </span><span class="nx">Unit</span><span class="p">,</span><span class="w"> </span><span class="nx">integration</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="nx">performance</span><span class="w"> </span><span class="nx">tests</span>
 <span class="err">├──</span><span class="w"> </span><span class="nx">examples</span><span class="o">/</span><span class="w">                </span><span class="err">#</span><span class="w"> </span><span class="nx">RAG</span><span class="w"> </span><span class="nx">notebooks</span><span class="p">,</span><span class="w"> </span><span class="nx">demos</span>
 <span class="err">└──</span><span class="w"> </span><span class="nx">docs</span><span class="o">/</span><span class="w">                    </span><span class="err">#</span><span class="w"> </span><span class="nx">Documentation</span>
 </code></pre></div>
@@ -791,14 +791,12 @@ pytest<span class="w"> </span>tests/unit/test_search.py
 <h2 id="areas-for-contribution">Areas for Contribution</h2>
 <h3 id="high-priority">High Priority</h3>
 <ul>
-<li><strong>Hybrid search</strong>: BM25 + vector combined search (FTS5 + vec0)</li>
 <li><strong>HNSW indexing</strong>: Faster approximate nearest neighbor search (waiting on sqlite-vec)</li>
-<li><strong>Advanced Metadata filtering</strong>: Complex WHERE clause support (AND, OR, IN)</li>
+<li><strong>Advanced Metadata filtering</strong>: Complex WHERE clause support (OR, nested queries)</li>
 <li><strong>Documentation</strong>: Docstrings, guides, API docs</li>
 </ul>
 <h3 id="medium-priority">Medium Priority</h3>
 <ul>
-<li><strong>Multi-collection support</strong>: Handle multiple vector collections per database</li>
 <li><strong>Custom Quantization</strong>: Support for custom quantization tables/centroids</li>
 <li><strong>Performance benchmarks</strong>: Add more comprehensive benchmarks (1M+ vectors)</li>
 <li><strong>Integration tests</strong>: Expand test coverage for LangChain/LlamaIndex</li>
@@ -819,8 +817,9 @@ pytest<span class="w"> </span>tests/unit/test_search.py
 <p>Example test structure:</p>
 <div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">test_similarity_search_with_k</span><span class="p">():</span>
     <span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;:memory:&quot;</span><span class="p">)</span>
-    <span class="n">db</span><span class="o">.</span><span class="n">add_texts</span><span class="p">([</span><span class="s2">&quot;doc1&quot;</span><span class="p">,</span> <span class="s2">&quot;doc2&quot;</span><span class="p">,</span> <span class="s2">&quot;doc3&quot;</span><span class="p">])</span>
-    <span class="n">results</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="s2">&quot;query&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;default&quot;</span><span class="p">)</span>
+    <span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">([</span><span class="s2">&quot;doc1&quot;</span><span class="p">,</span> <span class="s2">&quot;doc2&quot;</span><span class="p">,</span> <span class="s2">&quot;doc3&quot;</span><span class="p">])</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="s2">&quot;query&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
     <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
     <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">score</span> <span class="ow">in</span> <span class="n">results</span><span class="p">)</span>
 </code></pre></div>

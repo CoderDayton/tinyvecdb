@@ -718,6 +718,7 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 
 <span class="c1"># Initialize TinyVecDB</span>
 <span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;knowledge.db&quot;</span><span class="p">)</span>
+<span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;knowledge_base&quot;</span><span class="p">)</span>
 
 <span class="c1"># Generate embeddings using OpenAI</span>
 <span class="n">client</span> <span class="o">=</span> <span class="n">OpenAI</span><span class="p">()</span>
@@ -729,7 +730,7 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <span class="p">]</span>
 
 <span class="c1"># Store in TinyVecDB</span>
-<span class="n">db</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span>
+<span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span>
     <span class="n">texts</span><span class="o">=</span><span class="n">texts</span><span class="p">,</span>
     <span class="n">embeddings</span><span class="o">=</span><span class="n">embeddings</span><span class="p">,</span>
     <span class="n">metadatas</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;geography&quot;</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;biology&quot;</span><span class="p">}]</span>
@@ -741,11 +742,11 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
     <span class="nb">input</span><span class="o">=</span><span class="s2">&quot;capital of France&quot;</span>
 <span class="p">)</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">embedding</span>
 
-<span class="n">results</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query_embedding</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query_embedding</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Result: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">page_content</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
 <span class="c1"># Search with metadata filter</span>
-<span class="n">geo_results</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span>
+<span class="n">geo_results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span>
     <span class="n">query_embedding</span><span class="p">,</span>
     <span class="n">k</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
     <span class="nb">filter</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;geography&quot;</span><span class="p">},</span>
@@ -762,13 +763,14 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <span class="kn">from</span><span class="w"> </span><span class="nn">tinyvecdb.embeddings.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">embed_texts</span>
 
 <span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;local.db&quot;</span><span class="p">)</span>
+<span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;local_docs&quot;</span><span class="p">)</span>
 
 <span class="n">texts</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Paris is the capital of France.&quot;</span><span class="p">,</span> <span class="s2">&quot;The mitochondria is the powerhouse of the cell.&quot;</span><span class="p">]</span>
 
 <span class="c1"># Generate embeddings locally using HuggingFace models</span>
 <span class="n">embeddings</span> <span class="o">=</span> <span class="n">embed_texts</span><span class="p">(</span><span class="n">texts</span><span class="p">)</span>
 
-<span class="n">db</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span>
+<span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span>
     <span class="n">texts</span><span class="o">=</span><span class="n">texts</span><span class="p">,</span>
     <span class="n">embeddings</span><span class="o">=</span><span class="n">embeddings</span><span class="p">,</span>
     <span class="n">metadatas</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;geography&quot;</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;biology&quot;</span><span class="p">}]</span>
@@ -776,8 +778,13 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 
 <span class="c1"># Search</span>
 <span class="n">query_embeddings</span> <span class="o">=</span> <span class="n">embed_texts</span><span class="p">([</span><span class="s2">&quot;capital of France&quot;</span><span class="p">])</span>
-<span class="n">results</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query_embeddings</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query_embeddings</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Result: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">page_content</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Hybrid BM25 + Vector search</span>
+<span class="n">hybrid_results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">hybrid_search</span><span class="p">(</span><span class="s2">&quot;yellow fruit&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">doc</span><span class="p">,</span> <span class="n">score</span> <span class="ow">in</span> <span class="n">hybrid_results</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">doc</span><span class="o">.</span><span class="n">page_content</span><span class="p">,</span> <span class="n">score</span><span class="p">)</span>
 </code></pre></div>
 
 <p><strong>Local Embeddings Server</strong> (Optional):</p>
@@ -786,7 +793,7 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <span class="c1"># Now use http://localhost:8000/v1/embeddings with any OpenAI-compatible client</span>
 </code></pre></div>
 
-<p>See the <a href="ENV_SETUP/">Setup Guide</a> for configuring which HuggingFace model to use.</p>
+<p>See the <a href="ENV_SETUP/">Setup Guide</a> for advanced configuration, including model registry locking, throughput limits, and API key authentication.</p>
 <h3 id="option-3-with-langchain-or-llamaindex">Option 3: With LangChain or LlamaIndex</h3>
 <p>TinyVecDB integrates directly with popular frameworks:</p>
 <div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">tinyvecdb.integrations.langchain</span><span class="w"> </span><span class="kn">import</span> <span class="n">TinyVecDBVectorStore</span>
@@ -802,6 +809,26 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 </code></pre></div>
 
 <p>For complete RAG workflows with Ollama, LangChain, and LlamaIndex, see the <strong><a href="https://coderdayton.github.io/tinyvecdb/examples/">Examples</a></strong> page.</p>
+<h2 id="multi-collection-support">Multi-Collection Support</h2>
+<p>TinyVecDB supports multiple collections within a single database file.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Create/Get a named collection</span>
+<span class="n">users</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;users&quot;</span><span class="p">,</span> <span class="n">quantization</span><span class="o">=</span><span class="n">Quantization</span><span class="o">.</span><span class="n">INT8</span><span class="p">)</span>
+<span class="n">products</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;products&quot;</span><span class="p">,</span> <span class="n">quantization</span><span class="o">=</span><span class="n">Quantization</span><span class="o">.</span><span class="n">FLOAT</span><span class="p">)</span>
+
+<span class="n">users</span><span class="o">.</span><span class="n">add_texts</span><span class="p">([</span><span class="s2">&quot;User A&quot;</span><span class="p">],</span> <span class="n">embeddings</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.1</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">])</span>
+<span class="n">products</span><span class="o">.</span><span class="n">add_texts</span><span class="p">([</span><span class="s2">&quot;Product X&quot;</span><span class="p">],</span> <span class="n">embeddings</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.9</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">])</span>
+</code></pre></div>
+
+<h2 id="search-features">🔍 Search Features</h2>
+<h3 id="keyword-hybrid-search">Keyword &amp; Hybrid Search</h3>
+<p>TinyVecDB ships with first-class sparse search. Call <code>keyword_search("exact term")</code> for BM25/FTS-only scoring or <code>hybrid_search("concept", k=10)</code> to blend BM25 scores with vector distances using Reciprocal Rank Fusion—all inside a single SQLite file. Metadata filters still work, and no extra services are required.</p>
+<blockquote>
+<p><strong>Note:</strong> If you compile SQLite yourself, ensure <code>-DSQLITE_ENABLE_FTS5</code> is enabled so the FTS virtual table is available.</p>
+</blockquote>
+<p>Already have your own embeddings? Pass <code>query_vector=my_vector</code> to <code>hybrid_search</code> to reuse them (saves a second embedding pass and keeps dimensions aligned).</p>
+<blockquote>
+<p>Both integrations surface <code>keyword_search(...)</code> and <code>hybrid_search(...)</code>, so you can rerank sparse + dense results without leaving your favorite framework.</p>
+</blockquote>
 <h2 id="features">🛠️ Features</h2>
 <div class="table-wrapper"><table>
 <thead>
@@ -818,9 +845,19 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <td style="text-align: left;">Single SQLite file or in-memory.</td>
 </tr>
 <tr>
+<td style="text-align: left;"><strong>Collections</strong></td>
+<td style="text-align: left;">✅</td>
+<td style="text-align: left;">Multiple named collections per database file.</td>
+</tr>
+<tr>
 <td style="text-align: left;"><strong>Search</strong></td>
 <td style="text-align: left;">✅</td>
 <td style="text-align: left;">Cosine, Euclidean, and IP distance metrics.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Hybrid Search</strong></td>
+<td style="text-align: left;">✅</td>
+<td style="text-align: left;">BM25 keyword search + dense fusion via <code>hybrid_search</code>.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Quantization</strong></td>
@@ -835,7 +872,7 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <tr>
 <td style="text-align: left;"><strong>Integrations</strong></td>
 <td style="text-align: left;">✅</td>
-<td style="text-align: left;">First-class LangChain &amp; LlamaIndex support.</td>
+<td style="text-align: left;">LangChain/LlamaIndex shims expose keyword + hybrid helpers.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Hardware</strong></td>
@@ -886,8 +923,8 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 </ul>
 <h2 id="roadmap">🗺️ Roadmap</h2>
 <ul class="task-list">
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Hybrid Search (BM25 + Vector)</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Multi-collection support</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Hybrid Search (BM25 + Vector)</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Multi-collection support</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> HNSW Indexing (via sqlite-vec updates)</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Built-in Encryption (SQLCipher)</li>
 </ul>
@@ -1059,6 +1096,30 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
             data-active="false" data-depth="3">
             Option 3: With LangChain or LlamaIndex
+        </a>
+        
+        
+
+        
+        <a href="#multi-collection-support"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2">
+            Multi-Collection Support
+        </a>
+        
+
+        
+        <a href="#search-features"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2">
+            🔍 Search Features
+        </a>
+        
+        
+        <a href="#keyword-hybrid-search"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3">
+            Keyword &amp; Hybrid Search
         </a>
         
         

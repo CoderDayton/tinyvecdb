@@ -37,7 +37,7 @@ tinyvecdb/
 │   └── integrations/
 │       ├── langchain.py     # LangChain VectorStore wrapper
 │       └── llamaindex.py    # LlamaIndex VectorStore wrapper
-├── tests/                   # Unitm integration and performance tests
+├── tests/                   # Unit, integration and performance tests
 ├── examples/                # RAG notebooks, demos
 └── docs/                    # Documentation
 ```
@@ -87,14 +87,12 @@ pytest tests/unit/test_search.py
 
 ### High Priority
 
-- **Hybrid search**: BM25 + vector combined search (FTS5 + vec0)
 - **HNSW indexing**: Faster approximate nearest neighbor search (waiting on sqlite-vec)
-- **Advanced Metadata filtering**: Complex WHERE clause support (AND, OR, IN)
+- **Advanced Metadata filtering**: Complex WHERE clause support (OR, nested queries)
 - **Documentation**: Docstrings, guides, API docs
 
 ### Medium Priority
 
-- **Multi-collection support**: Handle multiple vector collections per database
 - **Custom Quantization**: Support for custom quantization tables/centroids
 - **Performance benchmarks**: Add more comprehensive benchmarks (1M+ vectors)
 - **Integration tests**: Expand test coverage for LangChain/LlamaIndex
@@ -117,8 +115,9 @@ Example test structure:
 ```python
 def test_similarity_search_with_k():
     db = VectorDB(":memory:")
-    db.add_texts(["doc1", "doc2", "doc3"])
-    results = db.similarity_search("query", k=2)
+    collection = db.collection("default")
+    collection.add_texts(["doc1", "doc2", "doc3"])
+    results = collection.similarity_search("query", k=2)
     assert len(results) == 2
     assert all(isinstance(score, float) for _, score in results)
 ```

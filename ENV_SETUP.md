@@ -18,11 +18,13 @@ TinyVecDB uses environment variables for configuration, particularly for the opt
 
 Used for local embeddings when running TinyVecDB without an external API.
 
-| Variable               | Description                                          | Default                 |
-| ---------------------- | ---------------------------------------------------- | ----------------------- |
-| `EMBEDDING_MODEL`      | HuggingFace model ID for local embeddings.           | `TaylorAI/bge-micro-v2` |
-| `EMBEDDING_CACHE_DIR`  | Directory to cache downloaded models.                | `~/.cache/tinyvecdb`    |
-| `EMBEDDING_BATCH_SIZE` | Batch size for inference (auto-detected if not set). | _Auto_                  |
+| Variable                          | Description                                                                                       | Default                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------- |
+| `EMBEDDING_MODEL`                 | HuggingFace model ID for local embeddings.                                                        | `TaylorAI/bge-micro-v2`     |
+| `EMBEDDING_CACHE_DIR`             | Directory to cache downloaded models.                                                             | `~/.cache/tinyvecdb`        |
+| `EMBEDDING_MODEL_REGISTRY`        | Comma-separated `alias=repo_id` entries to allowlist multiple local models.                       | `default=<EMBEDDING_MODEL>` |
+| `EMBEDDING_MODEL_REGISTRY_LOCKED` | Keep the registry allowlist enforced (`1`). Set to `0` to let clients request arbitrary repo IDs. | `1`                         |
+| `EMBEDDING_BATCH_SIZE`            | Batch size for inference (auto-detected if not set).                                              | _Auto_                      |
 
 #### Batch Size Auto-Detection
 
@@ -46,10 +48,18 @@ Only override `EMBEDDING_BATCH_SIZE` if you need to tune for specific workloads 
 
 Configuration for `tinyvecdb-server`.
 
-| Variable      | Description                 | Default                                   |
-| ------------- | --------------------------- | ----------------------------------------- |
-| `SERVER_HOST` | Host to bind the server to. | `0.0.0.0`                                 |
-| `SERVER_PORT` | Port to bind the server to. | `53287` (Code default) / `8000` (Example) |
+| Variable                             | Description                                                                    | Default                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------ | ----------------------------------------- |
+| `SERVER_HOST`                        | Host to bind the server to.                                                    | `0.0.0.0`                                 |
+| `SERVER_PORT`                        | Port to bind the server to.                                                    | `53287` (Code default) / `8000` (Example) |
+| `EMBEDDING_SERVER_MAX_REQUEST_ITEMS` | Max number of prompts allowed per `/v1/embeddings` request (protects latency). | `max(32, EMBEDDING_BATCH_SIZE)`           |
+| `EMBEDDING_SERVER_API_KEYS`          | Comma-separated API keys to require `Authorization: Bearer`/`X-API-Key`.       | _Disabled (unauthenticated)_              |
+
+When `EMBEDDING_SERVER_API_KEYS` is set, TinyVecDB also tracks request counts and token usage per key. Call `GET /v1/usage` with the same key to retrieve your stats.
+
+### Keyword & Hybrid Search Requirements
+
+The `keyword_search` and `hybrid_search` helpers rely on SQLite's FTS5 module. Python's built-in SQLite and most distro packages already enable it. If you're compiling SQLite manually (e.g., embedding TinyVecDB inside another binary), be sure to pass `-DSQLITE_ENABLE_FTS5` so the FTS virtual table is available. Without FTS5, these methods will raise a descriptive runtime error.
 
 ## Using with Custom Embedding Models
 

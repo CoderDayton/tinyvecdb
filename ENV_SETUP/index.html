@@ -679,7 +679,7 @@
 <script>
     const updatedAt = document.getElementById("updated_at");
     if (updatedAt) {
-        const date = new Date('2025-11-23T02:11:03-06:00');
+        const date = new Date('2025-11-23T06:07:46-06:00');
         updatedAt.textContent = date.toLocaleDateString();
     }
 </script>
@@ -718,6 +718,16 @@
 <td><code>EMBEDDING_CACHE_DIR</code></td>
 <td>Directory to cache downloaded models.</td>
 <td><code>~/.cache/tinyvecdb</code></td>
+</tr>
+<tr>
+<td><code>EMBEDDING_MODEL_REGISTRY</code></td>
+<td>Comma-separated <code>alias=repo_id</code> entries to allowlist multiple local models.</td>
+<td><code>default=&lt;EMBEDDING_MODEL&gt;</code></td>
+</tr>
+<tr>
+<td><code>EMBEDDING_MODEL_REGISTRY_LOCKED</code></td>
+<td>Keep the registry allowlist enforced (<code>1</code>). Set to <code>0</code> to let clients request arbitrary repo IDs.</td>
+<td><code>1</code></td>
 </tr>
 <tr>
 <td><code>EMBEDDING_BATCH_SIZE</code></td>
@@ -774,8 +784,21 @@
 <td>Port to bind the server to.</td>
 <td><code>53287</code> (Code default) / <code>8000</code> (Example)</td>
 </tr>
+<tr>
+<td><code>EMBEDDING_SERVER_MAX_REQUEST_ITEMS</code></td>
+<td>Max number of prompts allowed per <code>/v1/embeddings</code> request (protects latency).</td>
+<td><code>max(32, EMBEDDING_BATCH_SIZE)</code></td>
+</tr>
+<tr>
+<td><code>EMBEDDING_SERVER_API_KEYS</code></td>
+<td>Comma-separated API keys to require <code>Authorization: Bearer</code>/<code>X-API-Key</code>.</td>
+<td><em>Disabled (unauthenticated)</em></td>
+</tr>
 </tbody>
 </table></div>
+<p>When <code>EMBEDDING_SERVER_API_KEYS</code> is set, TinyVecDB also tracks request counts and token usage per key. Call <code>GET /v1/usage</code> with the same key to retrieve your stats.</p>
+<h3 id="keyword-hybrid-search-requirements">Keyword &amp; Hybrid Search Requirements</h3>
+<p>The <code>keyword_search</code> and <code>hybrid_search</code> helpers rely on SQLite's FTS5 module. Python's built-in SQLite and most distro packages already enable it. If you're compiling SQLite manually (e.g., embedding TinyVecDB inside another binary), be sure to pass <code>-DSQLITE_ENABLE_FTS5</code> so the FTS virtual table is available. Without FTS5, these methods will raise a descriptive runtime error.</p>
 <h2 id="using-with-custom-embedding-models">Using with Custom Embedding Models</h2>
 <p>To use a different HuggingFace model for local embeddings:</p>
 <div class="codehilite"><pre><span></span><code><span class="nv">EMBEDDING_MODEL</span><span class="o">=</span>sentence-transformers/all-MiniLM-L6-v2
@@ -931,6 +954,12 @@
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
             data-active="false" data-depth="3">
             Server
+        </a>
+        
+        <a href="#keyword-hybrid-search-requirements"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3">
+            Keyword &amp; Hybrid Search Requirements
         </a>
         
         

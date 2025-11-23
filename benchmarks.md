@@ -13,7 +13,7 @@
 | BIT          | 10,000  | 384        | 0.95 MB   | 32,321 vec/s | 0.27 ms          |
 | FLOAT        | 10,000  | 1536       | 60.55 MB  | 2,537 vec/s  | 15.71 ms         |
 
-## 13900k & 4090, sqlite-vec v0.1.6
+## 13900k & 4090, sqlite-vec v0.1.6 (100k vectors)
 
 **Model**: Snowflake/snowflake-arctic-embed-xs<br>
 **Batch Size**: Auto (512 on GPU)<br>
