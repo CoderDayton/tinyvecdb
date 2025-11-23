@@ -36,9 +36,12 @@ nav:
   - Home: index.md
   - API:
       - VectorDB: api/core.md
+      - Embeddings: api/embeddings.md
       - Integrations: api/integrations.md
+      - Configuration: api/config.md
   - Examples: examples.md
   - Benchmarks: benchmarks.md
+  - Changelog: CHANGELOG.md
   - Contributing: CONTRIBUTING.md
   - Setup: ENV_SETUP.md
 

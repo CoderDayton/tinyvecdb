@@ -165,7 +165,7 @@ class EmbeddingResponse(BaseModel):
 @app.post("/v1/embeddings")
 async def create_embeddings(
     request: EmbeddingRequest, api_identity: str = Depends(authenticate_request)
-):
+) -> EmbeddingResponse:
     """
     Create embeddings for the input text(s).
 
@@ -218,27 +218,29 @@ async def create_embeddings(
         data=[
             EmbeddingData(embedding=emb, index=i) for i, emb in enumerate(embeddings)
         ],
-        model=request.model or repo_id,
+        model=resolved_model_name or repo_id,
         usage={"prompt_tokens": total_tokens, "total_tokens": total_tokens},
     )
 
 
 @app.get("/v1/models")
-async def list_models(api_identity: str = Depends(authenticate_request)):
+async def list_models(
+    api_identity: str = Depends(authenticate_request),
+) -> dict[str, Any]:
     """List available embedding models (requires auth when configured)."""
     _ = api_identity  # dependency enforces auth when enabled
     return {"data": registry.list_models(), "object": "list"}
 
 
 @app.get("/v1/usage")
-async def usage(api_identity: str = Depends(authenticate_request)):
+async def usage(api_identity: str = Depends(authenticate_request)) -> dict[str, Any]:
     """Return aggregate or per-key usage statistics."""
     # If auth is enabled, only return the caller's stats; otherwise expose all.
     scope = api_identity if config.EMBEDDING_SERVER_API_KEYS else None
     return {"object": "usage", "data": usage_meter.snapshot(scope)}
 
 
-def run_server(host: str | None = None, port: int | None = None):
+def run_server(host: str | None = None, port: int | None = None) -> None:
     """Run the embedding server.
 
     Can be called programmatically or via the ``tinyvecdb-server`` CLI.

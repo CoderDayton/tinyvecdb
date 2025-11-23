@@ -15,7 +15,7 @@ else:  # Fallback to Any to keep runtime import optional
 DEFAULT_MODEL = config.EMBEDDING_MODEL
 CACHE_DIR = Path(os.path.expanduser(config.EMBEDDING_CACHE_DIR))
 _model_lock = threading.Lock()
-_loaded_models: dict[str, "SentenceTransformerType"] = {}
+_loaded_models: dict[str, SentenceTransformerType] = {}
 
 
 def _load_sentence_transformer_cls() -> type[SentenceTransformerType]:
@@ -64,12 +64,6 @@ def load_model(repo_id: str) -> SentenceTransformerType:
     # is often unnecessary or deprecated in newer transformers versions.
 
     return model
-
-
-def load_default_model() -> SentenceTransformerType:
-    """Backward-compatible helper for loading the configured default model."""
-    return load_model(DEFAULT_MODEL)
-
 
 def get_embedder(model_id: str | None = None) -> SentenceTransformerType:
     """Return a cached embedder for the requested model (defaults to config value)."""

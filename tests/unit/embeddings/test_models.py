@@ -7,7 +7,6 @@ from tinyvecdb.embeddings.models import (
     _load_sentence_transformer_cls,
     _load_snapshot_download,
     load_model,
-    load_default_model,
     get_embedder,
     embed_texts,
     _loaded_models,
@@ -82,14 +81,6 @@ def test_load_model():
         tokenizer_kwargs={"padding": True, "truncation": True, "max_length": 512},
         backend="onnx",
     )
-
-
-def test_load_default_model():
-    """Test load_default_model uses config DEFAULT_MODEL."""
-    with patch("tinyvecdb.embeddings.models.load_model") as mock_load:
-        with patch("tinyvecdb.embeddings.models.DEFAULT_MODEL", "default/model"):
-            load_default_model()
-    mock_load.assert_called_once_with("default/model")
 
 
 def test_get_embedder_caches_models():

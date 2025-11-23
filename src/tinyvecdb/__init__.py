@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .types import Document, DistanceStrategy
-from .core import VectorDB, Quantization, get_optimal_batch_size
+from .core import VectorDB, VectorCollection, Quantization, get_optimal_batch_size
 from .config import config
 from .integrations.langchain import TinyVecDBVectorStore
 from .integrations.llamaindex import TinyVecDBLlamaStore
@@ -9,6 +9,7 @@ from .integrations.llamaindex import TinyVecDBLlamaStore
 __version__ = "1.0.0"
 __all__ = [
     "VectorDB",
+    "VectorCollection",
     "Quantization",
     "Document",
     "DistanceStrategy",

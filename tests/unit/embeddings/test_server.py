@@ -168,5 +168,5 @@ def test_embeddings_default_model():
 
         assert response.status_code == 200
         data = response.json()
-        # Registry fixture sets default to "test-default"
-        assert data["model"] == "test-default"
+        # When no model specified, uses "default" as the model name
+        assert data["model"] == "default"

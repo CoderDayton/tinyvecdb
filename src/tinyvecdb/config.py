@@ -43,7 +43,21 @@ def _parse_bool_env(raw: str | None, default: bool) -> bool:
 
 
 class Config:
-    """Environment configuration."""
+    """
+    Configuration settings for TinyVecDB, loaded from environment variables.
+
+    Attributes:
+        EMBEDDING_MODEL: The default embedding model repo id or alias.
+        EMBEDDING_CACHE_DIR: Directory path for caching embedding models.
+        EMBEDDING_MODEL_REGISTRY: Mapping of model aliases to repo ids.
+        EMBEDDING_MODEL_REGISTRY_LOCKED: If True, only allow listed models.
+        EMBEDDING_BATCH_SIZE: Optimal batch size for embedding requests.
+        EMBEDDING_SERVER_MAX_REQUEST_ITEMS: Max items per embedding request.
+        EMBEDDING_SERVER_API_KEYS: Set of valid API keys for the embedding server.
+        DATABASE_PATH: Path to the TinyVecDB database file.
+        SERVER_HOST: Host address for the TinyVecDB server.
+        SERVER_PORT: Port number for the TinyVecDB server.
+    """
 
     # Embedding Model
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "TaylorAI/bge-micro-v2")

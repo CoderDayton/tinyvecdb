@@ -227,7 +227,7 @@ _Join the list of supporters! [Support me on GitHub](https://github.com/sponsors
 **Want to support the project?**
 
 - 🍵 [Buy me a coffee](https://www.buymeacoffee.com/coderdayton) (One-time donation)
-- 💎 [Get the Pro Pack](https://tinyvecdb.lemonsqueezy.com/) (Deployment templates & production recipes)
+- 💎 [Get the Pro Pack](https://tinyvecdb.lemonsqueezy.com/) (Deployment templates & production recipes) (Coming Soon)
 - 💖 [GitHub Sponsors](https://github.com/sponsors/coderdayton) (Monthly support)
 
 ## 📄 License
