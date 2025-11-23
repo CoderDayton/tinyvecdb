@@ -746,7 +746,6 @@
 <a href="https://github.com/coderdayton/simplevecdb"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/coderdayton/simplevecdb?style=social" /></a></p>
 <p><strong>The dead-simple, local-first vector database.</strong></p>
 <p>SimpleVecDB brings <strong>Chroma-like simplicity</strong> to a single <strong>SQLite file</strong>. Built on <code>sqlite-vec</code>, it offers high-performance vector search, quantization, and zero infrastructure headaches. Perfect for local RAG, offline agents, and indie hackers who need production-grade vector search without the operational overhead.</p>
-<hr />
 <h2 id="why-simplevecdb">Why SimpleVecDB?</h2>
 <ul>
 <li><strong>Zero Infrastructure</strong> — Just a <code>.db</code> file. No Docker, no Redis, no cloud bills.</li>
@@ -776,7 +775,7 @@
 <td style="text-align: left;">❌ Requires connectivity</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Prototyping \&amp; MVPs</strong></td>
+<td style="text-align: left;"><strong>Prototyping &amp; MVPs</strong></td>
 <td style="text-align: left;">✅ Zero config</td>
 <td style="text-align: left;">⚠️ Setup overhead</td>
 </tr>
@@ -792,7 +791,6 @@
 </tr>
 </tbody>
 </table></div>
-<hr />
 <h2 id="prerequisites">Prerequisites</h2>
 <p><strong>System Requirements:</strong></p>
 <ul>
@@ -808,7 +806,6 @@
 <blockquote>
 <p><strong>Note:</strong> If using custom-compiled SQLite, ensure <code>-DSQLITE_ENABLE_FTS5</code> is enabled for full-text search support.</p>
 </blockquote>
-<hr />
 <h2 id="installation">Installation</h2>
 <div class="codehilite"><pre><span></span><code><span class="c1"># Core library only (lightweight, 50MB)</span>
 pip<span class="w"> </span>install<span class="w"> </span>simplevecdb
@@ -821,7 +818,6 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <div class="codehilite"><pre><span></span><code>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;from simplevecdb import VectorDB; print(&#39;SimpleVecDB installed successfully!&#39;)&quot;</span>
 </code></pre></div>
 
-<hr />
 <h2 id="quickstart">Quickstart</h2>
 <p>SimpleVecDB is <strong>just a vector storage layer</strong>—it doesn't include an LLM or generate embeddings. This design keeps it lightweight and flexible. Choose your integration path:</p>
 <h3 id="option-1-with-openai-simplest">Option 1: With OpenAI (Simplest)</h3>
@@ -829,55 +825,35 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">simplevecdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorDB</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAI</span>
 
-<span class="c1"># Initialize database</span>
 <span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;knowledge.db&quot;</span><span class="p">)</span>
-<span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;knowledge_base&quot;</span><span class="p">)</span>
-
-<span class="c1"># Generate embeddings using OpenAI</span>
+<span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;docs&quot;</span><span class="p">)</span>
 <span class="n">client</span> <span class="o">=</span> <span class="n">OpenAI</span><span class="p">()</span>
-<span class="n">texts</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="s2">&quot;Paris is the capital of France.&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;The mitochondria is the powerhouse of the cell.&quot;</span>
-<span class="p">]</span>
 
+<span class="n">texts</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Paris is the capital of France.&quot;</span><span class="p">,</span> <span class="s2">&quot;Mitochondria powers cells.&quot;</span><span class="p">]</span>
 <span class="n">embeddings</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="n">client</span><span class="o">.</span><span class="n">embeddings</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
-        <span class="n">model</span><span class="o">=</span><span class="s2">&quot;text-embedding-3-small&quot;</span><span class="p">,</span>
-        <span class="nb">input</span><span class="o">=</span><span class="n">t</span>
-    <span class="p">)</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">embedding</span>
+    <span class="n">client</span><span class="o">.</span><span class="n">embeddings</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">&quot;text-embedding-3-small&quot;</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="n">t</span><span class="p">)</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">embedding</span>
     <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">texts</span>
 <span class="p">]</span>
 
-<span class="c1"># Store vectors with metadata</span>
 <span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span>
     <span class="n">texts</span><span class="o">=</span><span class="n">texts</span><span class="p">,</span>
     <span class="n">embeddings</span><span class="o">=</span><span class="n">embeddings</span><span class="p">,</span>
-    <span class="n">metadatas</span><span class="o">=</span><span class="p">[</span>
-        <span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;geography&quot;</span><span class="p">,</span> <span class="s2">&quot;verified&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
-        <span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;biology&quot;</span><span class="p">,</span> <span class="s2">&quot;verified&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
-    <span class="p">]</span>
+    <span class="n">metadatas</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;geography&quot;</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;biology&quot;</span><span class="p">}]</span>
 <span class="p">)</span>
 
-<span class="c1"># Semantic search</span>
-<span class="n">query_embedding</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">embeddings</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+<span class="c1"># Search</span>
+<span class="n">query_emb</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">embeddings</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="s2">&quot;text-embedding-3-small&quot;</span><span class="p">,</span>
     <span class="nb">input</span><span class="o">=</span><span class="s2">&quot;capital of France&quot;</span>
 <span class="p">)</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">embedding</span>
 
-<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query_embedding</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Top result: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">page_content</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<span class="c1"># Output: Top result: Paris is the capital of France.</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query_emb</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">page_content</span><span class="p">)</span>  <span class="c1"># &quot;Paris is the capital of France.&quot;</span>
 
 <span class="c1"># Filter by metadata</span>
-<span class="n">geo_results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span>
-    <span class="n">query_embedding</span><span class="p">,</span>
-    <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
-    <span class="nb">filter</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;geography&quot;</span><span class="p">}</span>
-<span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Geography results: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">geo_results</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="n">filtered</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query_emb</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="nb">filter</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;geography&quot;</span><span class="p">})</span>
 </code></pre></div>
 
-<hr />
 <h3 id="option-2-fully-local-privacy-first">Option 2: Fully Local (Privacy-First)</h3>
 <p>Best for: Offline apps, sensitive data, zero API costs.</p>
 <div class="codehilite"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;simplevecdb[server]&quot;</span>
@@ -887,124 +863,79 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <span class="kn">from</span><span class="w"> </span><span class="nn">simplevecdb.embeddings.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">embed_texts</span>
 
 <span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;local.db&quot;</span><span class="p">)</span>
-<span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;local_docs&quot;</span><span class="p">)</span>
+<span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;docs&quot;</span><span class="p">)</span>
 
-<span class="n">texts</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="s2">&quot;Paris is the capital of France.&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;The mitochondria is the powerhouse of the cell.&quot;</span>
-<span class="p">]</span>
+<span class="n">texts</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Paris is the capital of France.&quot;</span><span class="p">,</span> <span class="s2">&quot;Mitochondria powers cells.&quot;</span><span class="p">]</span>
+<span class="n">embeddings</span> <span class="o">=</span> <span class="n">embed_texts</span><span class="p">(</span><span class="n">texts</span><span class="p">)</span>  <span class="c1"># Local HuggingFace models</span>
 
-<span class="c1"># Generate embeddings locally (uses HuggingFace models)</span>
-<span class="n">embeddings</span> <span class="o">=</span> <span class="n">embed_texts</span><span class="p">(</span><span class="n">texts</span><span class="p">)</span>
+<span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span><span class="n">texts</span><span class="o">=</span><span class="n">texts</span><span class="p">,</span> <span class="n">embeddings</span><span class="o">=</span><span class="n">embeddings</span><span class="p">)</span>
 
-<span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span>
-    <span class="n">texts</span><span class="o">=</span><span class="n">texts</span><span class="p">,</span>
-    <span class="n">embeddings</span><span class="o">=</span><span class="n">embeddings</span><span class="p">,</span>
-    <span class="n">metadatas</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;geography&quot;</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;biology&quot;</span><span class="p">}]</span>
-<span class="p">)</span>
+<span class="c1"># Search</span>
+<span class="n">query_emb</span> <span class="o">=</span> <span class="n">embed_texts</span><span class="p">([</span><span class="s2">&quot;capital of France&quot;</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query_emb</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 
-<span class="c1"># Search locally</span>
-<span class="n">query_embeddings</span> <span class="o">=</span> <span class="n">embed_texts</span><span class="p">([</span><span class="s2">&quot;capital of France&quot;</span><span class="p">])</span>
-<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query_embeddings</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Result: </span><span class="si">{</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">page_content</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-
-<span class="c1"># Hybrid search (BM25 + vector fusion)</span>
-<span class="n">hybrid_results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">hybrid_search</span><span class="p">(</span><span class="s2">&quot;powerhouse cell&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">doc</span><span class="p">,</span> <span class="n">score</span> <span class="ow">in</span> <span class="n">hybrid_results</span><span class="p">:</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">doc</span><span class="o">.</span><span class="n">page_content</span><span class="si">}</span><span class="s2"> (score: </span><span class="si">{</span><span class="n">score</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+<span class="c1"># Hybrid search (BM25 + vector)</span>
+<span class="n">hybrid</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">hybrid_search</span><span class="p">(</span><span class="s2">&quot;powerhouse cell&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </code></pre></div>
 
-<p><strong>Optional: Local Embeddings Server</strong></p>
-<p>Run an OpenAI-compatible API endpoint locally:</p>
+<p><strong>Optional: Run embeddings server (OpenAI-compatible)</strong></p>
 <div class="codehilite"><pre><span></span><code>simplevecdb-server<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
-<span class="c1"># Use http://localhost:8000/v1/embeddings with any OpenAI SDK</span>
 </code></pre></div>
 
-<p>See the <a href="ENV_SETUP/">Setup Guide</a> for advanced configuration: model registry locking, rate limits, API key authentication, and CUDA optimization.</p>
-<hr />
+<p>See <a href="ENV_SETUP/">ENV_SETUP.md</a> for configuration: model registry, rate limits, API keys, CUDA optimization.</p>
 <h3 id="option-3-with-langchain-or-llamaindex">Option 3: With LangChain or LlamaIndex</h3>
 <p>Best for: Existing RAG pipelines, framework-based workflows.</p>
 <div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">simplevecdb.integrations.langchain</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimpleVecDBVectorStore</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">langchain_openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAIEmbeddings</span>
 
-<span class="c1"># Use any LangChain embedding model</span>
-<span class="n">embeddings</span> <span class="o">=</span> <span class="n">OpenAIEmbeddings</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">&quot;text-embedding-3-small&quot;</span><span class="p">)</span>
 <span class="n">store</span> <span class="o">=</span> <span class="n">SimpleVecDBVectorStore</span><span class="p">(</span>
     <span class="n">db_path</span><span class="o">=</span><span class="s2">&quot;langchain.db&quot;</span><span class="p">,</span>
-    <span class="n">embedding</span><span class="o">=</span><span class="n">embeddings</span>
+    <span class="n">embedding</span><span class="o">=</span><span class="n">OpenAIEmbeddings</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">&quot;text-embedding-3-small&quot;</span><span class="p">)</span>
 <span class="p">)</span>
 
-<span class="c1"># Standard LangChain interface</span>
 <span class="n">store</span><span class="o">.</span><span class="n">add_texts</span><span class="p">([</span><span class="s2">&quot;Paris is the capital of France.&quot;</span><span class="p">])</span>
 <span class="n">results</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="s2">&quot;capital of France&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">page_content</span><span class="p">)</span>
-
-<span class="c1"># Hybrid search available too</span>
-<span class="n">hybrid_results</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">hybrid_search</span><span class="p">(</span><span class="s2">&quot;France capital&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">hybrid</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">hybrid_search</span><span class="p">(</span><span class="s2">&quot;France capital&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>  <span class="c1"># BM25 + vector</span>
 </code></pre></div>
 
-<p><strong>For LlamaIndex:</strong></p>
-<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">simplevecdb.integrations.llamaindex</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimpleVecDBVectorStore</span>
+<p><strong>LlamaIndex:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">simplevecdb.integrations.llamaindex</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimpleVecDBLlamaStore</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">llama_index.embeddings.openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAIEmbedding</span>
 
-<span class="n">embedding</span> <span class="o">=</span> <span class="n">OpenAIEmbedding</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">&quot;text-embedding-3-small&quot;</span><span class="p">)</span>
-<span class="n">store</span> <span class="o">=</span> <span class="n">SimpleVecDBVectorStore</span><span class="p">(</span><span class="n">db_path</span><span class="o">=</span><span class="s2">&quot;llamaindex.db&quot;</span><span class="p">,</span> <span class="n">embedding</span><span class="o">=</span><span class="n">embedding</span><span class="p">)</span>
-<span class="c1"># Use with LlamaIndex&#39;s VectorStoreIndex</span>
+<span class="n">store</span> <span class="o">=</span> <span class="n">SimpleVecDBLlamaStore</span><span class="p">(</span>
+    <span class="n">db_path</span><span class="o">=</span><span class="s2">&quot;llama.db&quot;</span><span class="p">,</span>
+    <span class="n">embedding</span><span class="o">=</span><span class="n">OpenAIEmbedding</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">&quot;text-embedding-3-small&quot;</span><span class="p">)</span>
+<span class="p">)</span>
 </code></pre></div>
 
-<p>See complete RAG workflows with Ollama, LangChain, and LlamaIndex in the <strong><a href="https://coderdayton.github.io/simplevecdb/examples/">Examples</a></strong> page.</p>
-<hr />
+<p>See <strong><a href="examples/">Examples</a></strong> for complete RAG workflows with Ollama.</p>
 <h2 id="core-features">Core Features</h2>
 <h3 id="multi-collection-support">Multi-Collection Support</h3>
 <p>Organize vectors by domain within a single database file:</p>
 <div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">simplevecdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorDB</span><span class="p">,</span> <span class="n">Quantization</span>
 
-<span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;multi_tenant.db&quot;</span><span class="p">)</span>
-
-<span class="c1"># Different collections can have different quantization strategies</span>
-<span class="n">users</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;user_profiles&quot;</span><span class="p">,</span> <span class="n">quantization</span><span class="o">=</span><span class="n">Quantization</span><span class="o">.</span><span class="n">INT8</span><span class="p">)</span>
-<span class="n">products</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;product_catalog&quot;</span><span class="p">,</span> <span class="n">quantization</span><span class="o">=</span><span class="n">Quantization</span><span class="o">.</span><span class="n">FLOAT</span><span class="p">)</span>
-<span class="n">documents</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;knowledge_base&quot;</span><span class="p">,</span> <span class="n">quantization</span><span class="o">=</span><span class="n">Quantization</span><span class="o">.</span><span class="n">BIT</span><span class="p">)</span>
+<span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;app.db&quot;</span><span class="p">)</span>
+<span class="n">users</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;users&quot;</span><span class="p">,</span> <span class="n">quantization</span><span class="o">=</span><span class="n">Quantization</span><span class="o">.</span><span class="n">INT8</span><span class="p">)</span>
+<span class="n">products</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;products&quot;</span><span class="p">,</span> <span class="n">quantization</span><span class="o">=</span><span class="n">Quantization</span><span class="o">.</span><span class="n">BIT</span><span class="p">)</span>
 
 <span class="c1"># Isolated namespaces</span>
 <span class="n">users</span><span class="o">.</span><span class="n">add_texts</span><span class="p">([</span><span class="s2">&quot;Alice likes hiking&quot;</span><span class="p">],</span> <span class="n">embeddings</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.1</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">])</span>
 <span class="n">products</span><span class="o">.</span><span class="n">add_texts</span><span class="p">([</span><span class="s2">&quot;Hiking boots&quot;</span><span class="p">],</span> <span class="n">embeddings</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.9</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">])</span>
-
-<span class="c1"># Collections don&#39;t interfere with each other</span>
-<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">users</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">([</span><span class="mf">0.1</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">))</span> <span class="o">==</span> <span class="mi">1</span>
-<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">products</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">([</span><span class="mf">0.9</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">))</span> <span class="o">==</span> <span class="mi">1</span>
 </code></pre></div>
 
-<hr />
 <h3 id="search-capabilities">Search Capabilities</h3>
-<p><strong>Vector Similarity Search</strong></p>
-<div class="codehilite"><pre><span></span><code><span class="c1"># Cosine similarity (default)</span>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Vector similarity (cosine/L2/inner product)</span>
 <span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query_vector</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
-</code></pre></div>
 
-<p><strong>Keyword Search (BM25 + FTS5)</strong></p>
-<div class="codehilite"><pre><span></span><code><span class="c1"># Full-text search with BM25 ranking</span>
-<span class="n">keyword_results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">keyword_search</span><span class="p">(</span><span class="s2">&quot;exact phrase matching&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
-</code></pre></div>
+<span class="c1"># Keyword search (BM25)</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">keyword_search</span><span class="p">(</span><span class="s2">&quot;exact phrase&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
 
-<p><strong>Hybrid Search (Best of Both Worlds)</strong></p>
-<div class="codehilite"><pre><span></span><code><span class="c1"># Combines BM25 + vector similarity via Reciprocal Rank Fusion</span>
-<span class="n">hybrid_results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">hybrid_search</span><span class="p">(</span>
-    <span class="n">query_text</span><span class="o">=</span><span class="s2">&quot;machine learning concepts&quot;</span><span class="p">,</span>
-    <span class="n">k</span><span class="o">=</span><span class="mi">10</span>
-<span class="p">)</span>
+<span class="c1"># Hybrid (BM25 + vector fusion)</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">hybrid_search</span><span class="p">(</span><span class="s2">&quot;machine learning&quot;</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">hybrid_search</span><span class="p">(</span><span class="s2">&quot;ML concepts&quot;</span><span class="p">,</span> <span class="n">query_vector</span><span class="o">=</span><span class="n">my_vector</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
 
-<span class="c1"># Reuse your own embeddings (skips re-encoding)</span>
-<span class="n">hybrid_results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">hybrid_search</span><span class="p">(</span>
-    <span class="n">query_text</span><span class="o">=</span><span class="s2">&quot;machine learning concepts&quot;</span><span class="p">,</span>
-    <span class="n">query_vector</span><span class="o">=</span><span class="n">my_precomputed_vector</span><span class="p">,</span>
-    <span class="n">k</span><span class="o">=</span><span class="mi">10</span>
-<span class="p">)</span>
-</code></pre></div>
-
-<p><strong>Metadata Filtering</strong></p>
-<div class="codehilite"><pre><span></span><code><span class="c1"># SQL WHERE clause syntax</span>
-<span class="n">filtered</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span>
+<span class="c1"># Metadata filtering</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span>
     <span class="n">query_vector</span><span class="p">,</span>
     <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
     <span class="nb">filter</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;technical&quot;</span><span class="p">,</span> <span class="s2">&quot;verified&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
@@ -1012,9 +943,8 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 </code></pre></div>
 
 <blockquote>
-<p><strong>Pro tip:</strong> Both LangChain and LlamaIndex integrations expose <code>keyword_search()</code> and <code>hybrid_search()</code> methods for framework-native hybrid retrieval.</p>
+<p><strong>Tip:</strong> LangChain and LlamaIndex integrations support all search methods.</p>
 </blockquote>
-<hr />
 <h2 id="feature-matrix">Feature Matrix</h2>
 <div class="table-wrapper"><table>
 <thead>
@@ -1082,7 +1012,6 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 </tr>
 </tbody>
 </table></div>
-<hr />
 <h2 id="performance-benchmarks">Performance Benchmarks</h2>
 <p><strong>Test Environment:</strong> Intel i9-13900K, NVIDIA RTX 4090, <code>sqlite-vec</code> v0.1.6
 <strong>Dataset:</strong> 10,000 vectors × 384 dimensions</p>
@@ -1126,8 +1055,6 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <li>INT8 offers balanced performance (79% faster inserts, minimal query overhead)</li>
 <li>Sub-4ms query latency on consumer hardware</li>
 </ul>
-<p>See detailed benchmarks across different hardware configurations in the <strong><a href="benchmarks/">Benchmarks</a></strong> section.</p>
-<hr />
 <h2 id="documentation">Documentation</h2>
 <ul>
 <li><strong><a href="ENV_SETUP/">Setup Guide</a></strong> — Environment variables, server configuration, authentication</li>
@@ -1136,7 +1063,6 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <li><strong><a href="examples/">Integration Examples</a></strong> — RAG notebooks, Ollama workflows, production patterns</li>
 <li><strong><a href="CONTRIBUTING/">Contributing Guide</a></strong> — Development setup, testing, PR guidelines</li>
 </ul>
-<hr />
 <h2 id="troubleshooting">Troubleshooting</h2>
 <p><strong>Import Error: <code>sqlite3.OperationalError: no such module: fts5</code></strong></p>
 <div class="codehilite"><pre><span></span><code><span class="c1"># Your Python&#39;s SQLite was compiled without FTS5</span>
@@ -1193,18 +1119,21 @@ pip<span class="w"> </span>install<span class="w"> </span>torch<span class="w"> 
 <li><a href="https://coderdayton.github.io/simplevecdb/examples/">Examples Gallery</a> — Community-contributed notebooks</li>
 </ul>
 <h2 id="sponsors">Sponsors</h2>
-<p>SimpleVecDB is an independent open-source project. If it's useful to you, consider supporting its development:</p>
-<p><strong>Company Sponsors</strong>
-<em>Become the first company sponsor!</em> <a href="https://github.com/sponsors/coderdayton">Support on GitHub →</a></p>
-<p><strong>Individual Supporters</strong>
-<em>Join the list of supporters!</em> <a href="https://github.com/sponsors/coderdayton">Support on GitHub →</a></p>
+<p>SimpleVecDB is independently developed and maintained. If you or your company use it in production, please consider sponsoring to ensure its continued development and support.</p>
+<p><strong>Company Sponsors</strong></p>
+<p><em>Become the first company sponsor!</em> <a href="https://github.com/sponsors/coderdayton">Support on GitHub →</a></p>
+<p><strong>Individual Supporters</strong></p>
+<p><em>Join the list of supporters!</em> <a href="https://github.com/sponsors/coderdayton">Support on GitHub →</a></p>
 <!-- sponsors -->
-<h2 id="other-ways-to-support">Other Ways to Support</h2>
+<h3 id="other-ways-to-support">Other Ways to Support</h3>
 <ul>
-<li>☕ <a href="https://www.buymeacoffee.com/coderdayton">Buy me a coffee</a> (one-time donation)</li>
-<li>💎 <a href="https://simplevecdb.lemonsqueezy.com/">Get the Pro Pack</a> — Deployment templates \&amp; production recipes (coming soon)</li>
-<li>💖 <a href="https://github.com/sponsors/coderdayton">GitHub Sponsors</a> (monthly support)</li>
+<li>🍵 <strong><a href="https://www.buymeacoffee.com/coderdayton">Buy me a coffee</a></strong> - One-time donation</li>
+<li>💎 <strong><a href="https://simplevecdb.lemonsqueezy.com/">Get the Pro Pack</a></strong> - Production deployment templates &amp; recipes</li>
+<li>⭐ <strong>Star the repo</strong> - Helps with visibility</li>
+<li>🐛 <strong>Report bugs</strong> - Improve the project for everyone</li>
+<li>📝 <strong>Contribute</strong> - See <a href="CONTRIBUTING/">CONTRIBUTING.md</a></li>
 </ul>
+<p><strong>Why sponsor?</strong> Your support ensures SimpleVecDB stays maintained, secure, and compatible with the latest Python/SQLite versions.</p>
 <h2 id="license">License</h2>
 <p><a href="LICENSE">MIT License</a> — Free for personal and commercial use.</p>
 <!-- sponsors -->
@@ -1481,13 +1410,13 @@ pip<span class="w"> </span>install<span class="w"> </span>torch<span class="w"> 
             Sponsors
         </a>
         
-
         
         <a href="#other-ways-to-support"
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
-            data-active="false" data-depth="2">
+            data-active="false" data-depth="3">
             Other Ways to Support
         </a>
+        
         
 
         
