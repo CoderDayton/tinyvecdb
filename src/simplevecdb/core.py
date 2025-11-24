@@ -16,6 +16,7 @@ from .utils import _import_optional
 from .engine.quantization import QuantizationStrategy
 from .engine.search import SearchEngine
 from .engine.catalog import CatalogManager
+from . import constants
 
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
@@ -60,18 +61,17 @@ def get_optimal_batch_size() -> int:
             gpu_props = torch.cuda.get_device_properties(0)
             vram_gb = gpu_props.total_memory / (1024**3)
 
-            if vram_gb >= 20:
-                return 512  # RTX 4090, A100, H100
-            elif vram_gb >= 12:
-                return 256  # RTX 4070 Ti, 3090, A10
-            elif vram_gb >= 8:
-                return 128  # RTX 4060 Ti, 3070
-            else:
-                return 64  # GTX 1660, RTX 3050
+            # Check VRAM thresholds from high to low
+            for vram_threshold, batch_size in sorted(
+                constants.BATCH_SIZE_VRAM_THRESHOLDS.items(), reverse=True
+            ):
+                if vram_gb >= vram_threshold:
+                    return batch_size
+            return 64  # Fallback for low VRAM
 
         # Check for AMD ROCm GPU
         if hasattr(torch, "hip") and torch.hip.is_available():  # type: ignore
-            return 256
+            return constants.DEFAULT_AMD_ROCM_BATCH_SIZE
 
         # Check for Apple Metal (Apple Silicon)
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -85,13 +85,13 @@ def get_optimal_batch_size() -> int:
                     ).lower()
 
                     if "m3" in chip_info or "m4" in chip_info:
-                        return 64
+                        return constants.DEFAULT_APPLE_M3_M4_BATCH_SIZE
                     elif "max" in chip_info or "ultra" in chip_info:
-                        return 128
+                        return constants.DEFAULT_APPLE_MAX_ULTRA_BATCH_SIZE
                     else:
-                        return 32
+                        return constants.DEFAULT_APPLE_M1_M2_BATCH_SIZE
                 except Exception:
-                    return 32
+                    return constants.DEFAULT_APPLE_M1_M2_BATCH_SIZE
 
     # 2. Try ONNX Runtime detection
     ort = _import_optional("onnxruntime")
@@ -125,20 +125,22 @@ def get_optimal_batch_size() -> int:
     # Check for ARM architecture (mobile/embedded)
     if "arm" in machine or "aarch64" in machine:
         if cpu_count <= 4:
-            return 4
+            return constants.DEFAULT_ARM_MOBILE_BATCH_SIZE
         elif cpu_count <= 8:
-            return 8
+            return constants.DEFAULT_ARM_PI_BATCH_SIZE
         else:
-            return 16
+            return constants.DEFAULT_ARM_SERVER_BATCH_SIZE
 
     # x86/x64 CPU
-    base_batch = 16
-    if cpu_count >= 32:
-        base_batch = 64
-    elif cpu_count >= 16:
-        base_batch = 48
-    elif cpu_count >= 8:
-        base_batch = 32
+    base_batch = constants.DEFAULT_CPU_FALLBACK_BATCH_SIZE
+
+    # Check core count thresholds from high to low
+    for core_threshold, batch_size in sorted(
+        constants.CPU_BATCH_SIZE_BY_CORES.items(), reverse=True
+    ):
+        if cpu_count >= core_threshold:
+            base_batch = batch_size
+            break
 
     # Constrain by available RAM to avoid swapping
     # Rough heuristic: reduce batch size if RAM is tight

@@ -4635,7 +4635,7 @@ wheels = [
 
 [[package]]
 name = "sentence-transformers"
-version = "3.3.1"
+version = "5.1.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "huggingface-hub" },
@@ -4646,10 +4646,11 @@ dependencies = [
     { name = "torch" },
     { name = "tqdm" },
     { name = "transformers" },
+    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/79/0a/c677efe908b20e7e8d4ed6cce3a3447eebc7dc5e348e458f5f9a44a72b00/sentence_transformers-3.3.1.tar.gz", hash = "sha256:9635dbfb11c6b01d036b9cfcee29f7716ab64cf2407ad9f403a2e607da2ac48b", size = 217914, upload-time = "2024-11-18T14:37:40.954Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/96/f3f3409179d14dbfdbea8622e2e9eaa3c8836ddcaecd2cd5ff0a11731d20/sentence_transformers-5.1.2.tar.gz", hash = "sha256:0f6c8bd916a78dc65b366feb8d22fd885efdb37432e7630020d113233af2b856", size = 375185, upload-time = "2025-10-22T12:47:55.019Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8b/c8/990e22a465e4771338da434d799578865d6d7ef1fdb50bd844b7ecdcfa19/sentence_transformers-3.3.1-py3-none-any.whl", hash = "sha256:abffcc79dab37b7d18d21a26d5914223dd42239cfe18cb5e111c66c54b658ae7", size = 268797, upload-time = "2024-11-18T14:37:38.579Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/a6/a607a737dc1a00b7afe267b9bfde101b8cee2529e197e57471d23137d4e5/sentence_transformers-5.1.2-py3-none-any.whl", hash = "sha256:724ce0ea62200f413f1a5059712aff66495bc4e815a1493f7f9bca242414c333", size = 488009, upload-time = "2025-10-22T12:47:53.433Z" },
 ]
 
 [package.optional-dependencies]
@@ -4668,7 +4669,7 @@ wheels = [
 
 [[package]]
 name = "simplevecdb"
-version = "1.0.0"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -4720,7 +4721,7 @@ requires-dist = [
     { name = "ollama", marker = "extra == 'examples'" },
     { name = "psutil", specifier = ">=5.9.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
-    { name = "sentence-transformers", extras = ["onnx"], marker = "extra == 'server'", specifier = "==3.3.1" },
+    { name = "sentence-transformers", extras = ["onnx"], marker = "extra == 'server'", specifier = "==5.1.2" },
     { name = "sqlite-vec", specifier = ">=0.1.6" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.30" },
 ]
@@ -4746,7 +4747,7 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov" },
     { name = "ruff", specifier = ">=0.1.0" },
-    { name = "sentence-transformers", extras = ["onnx"], specifier = "==3.3.1" },
+    { name = "sentence-transformers", extras = ["onnx"], specifier = "==5.1.2" },
     { name = "types-psutil", specifier = ">=5.9.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]

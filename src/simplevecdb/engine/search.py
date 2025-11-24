@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 from ..types import Document, DistanceStrategy
 from .quantization import normalize_l2
+from .. import constants
 
 if TYPE_CHECKING:
     import sqlite3
@@ -41,7 +42,7 @@ class SearchEngine:
     def similarity_search(
         self,
         query: str | Sequence[float],
-        k: int = 5,
+        k: int = constants.DEFAULT_K,
         filter: dict[str, Any] | None = None,
         filter_builder: Callable | None = None,
     ) -> list[tuple[Document, float]]:

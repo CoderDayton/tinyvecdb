@@ -6,6 +6,7 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.documents import Document as LangChainDocument
 
 from simplevecdb.core import VectorDB  # core class
+from simplevecdb import constants
 
 
 class SimpleVecDBVectorStore(VectorStore):
@@ -165,7 +166,7 @@ class SimpleVecDBVectorStore(VectorStore):
         self,
         query: str,
         k: int = 4,
-        fetch_k: int = 20,
+        fetch_k: int = constants.DEFAULT_FETCH_K,
         lambda_mult: float = 0.5,
         **kwargs: Any,
     ) -> list[LangChainDocument]:
@@ -232,7 +233,7 @@ class SimpleVecDBVectorStore(VectorStore):
             query_vector=query_vec,
             vector_k=kwargs.get("vector_k"),
             keyword_k=kwargs.get("keyword_k"),
-            rrf_k=kwargs.get("rrf_k", 60),
+            rrf_k=kwargs.get("rrf_k", constants.DEFAULT_RRF_K),
         )
         return [
             LangChainDocument(page_content=doc.page_content, metadata=doc.metadata)

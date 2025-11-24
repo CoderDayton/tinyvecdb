@@ -5,6 +5,21 @@ All notable changes to SimpleVecDB will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-01-23
+
+### Changed
+
+- **Refactored configuration constants** into dedicated `constants.py` module
+  - Extracted hardware batch size thresholds (VRAM, CPU cores, ARM variants)
+  - Extracted search defaults (k=5, rrf_k=60, fetch_k=20)
+  - Improved maintainability and centralized configuration
+
+### Fixed
+
+- **Updated dependencies**
+  - Bumped `sentence-transformers[onnx]` from 3.3.1 to 5.1.2
+  - All embeddings/server tests passing with new version
+
 ## [1.1.0] - 11-23-2025
 
 ### 🏗️ Architecture Refactoring

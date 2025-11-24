@@ -1,0 +1,38 @@
+"""Configuration constants for SimpleVecDB."""
+
+# Hardware batch size thresholds for GPU VRAM (in GB)
+BATCH_SIZE_VRAM_THRESHOLDS = {
+    20: 512,  # RTX 4090, A100, H100
+    12: 256,  # RTX 4070 Ti, 3090, A10
+    8: 128,  # RTX 4060 Ti, 3070
+    4: 64,  # GTX 1660, RTX 3050
+}
+
+# CPU batch size by core count
+CPU_BATCH_SIZE_BY_CORES = {
+    32: 64,
+    16: 48,
+    8: 32,
+}
+
+# Default parameters
+DEFAULT_DISTANCE_STRATEGY = "cosine"
+DEFAULT_QUANTIZATION = "float"
+
+# SQL injection prevention
+COLLECTION_NAME_PATTERN = r"^[a-zA-Z0-9_]+$"
+
+# Search defaults
+DEFAULT_K = 5
+DEFAULT_RRF_K = 60
+DEFAULT_FETCH_K = 20
+
+# Hardware-specific defaults
+DEFAULT_AMD_ROCM_BATCH_SIZE = 256
+DEFAULT_APPLE_M1_M2_BATCH_SIZE = 32
+DEFAULT_APPLE_M3_M4_BATCH_SIZE = 64
+DEFAULT_APPLE_MAX_ULTRA_BATCH_SIZE = 128
+DEFAULT_ARM_MOBILE_BATCH_SIZE = 4
+DEFAULT_ARM_PI_BATCH_SIZE = 8
+DEFAULT_ARM_SERVER_BATCH_SIZE = 16
+DEFAULT_CPU_FALLBACK_BATCH_SIZE = 16
