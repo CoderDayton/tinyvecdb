@@ -608,6 +608,23 @@
                 
                 <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class="group/menu-item relative">
     <a data-slot="sidebar-menu-button" data-active="false" data-sidebar="menu-button"
+        data-size="default" href="/SimpleVecDB/api/async/"
+        class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground peer/menu-button flex items-center gap-2 rounded-md p-2 text-left outline-hidden ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 data-[active=true]:bg-accent data-[active=true]:border-accent 3xl:fixed:w-full 3xl:fixed:max-w-48 relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md">
+
+        
+        Async API
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+                
+                <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class="group/menu-item relative">
+    <a data-slot="sidebar-menu-button" data-active="false" data-sidebar="menu-button"
         data-size="default" href="/SimpleVecDB/api/embeddings/"
         class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground peer/menu-button flex items-center gap-2 rounded-md p-2 text-left outline-hidden ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 data-[active=true]:bg-accent data-[active=true]:border-accent 3xl:fixed:w-full 3xl:fixed:max-w-48 relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md">
 
@@ -796,7 +813,7 @@
 <script>
     const updatedAt = document.getElementById("updated_at");
     if (updatedAt) {
-        const date = new Date('2025-11-23T14:56:03-06:00');
+        const date = new Date('2025-11-25T22:15:00-06:00');
         updatedAt.textContent = date.toLocaleDateString();
     }
 </script>
@@ -815,6 +832,7 @@
 <li><strong>Zero Infrastructure</strong> — Just a <code>.db</code> file. No Docker, no Redis, no cloud bills.</li>
 <li><strong>Blazing Fast</strong> — ~2ms queries on consumer hardware with 32x storage efficiency via quantization.</li>
 <li><strong>Truly Portable</strong> — Runs anywhere SQLite runs: Linux, macOS, Windows, even WASM.</li>
+<li><strong>Async Ready</strong> — Full async/await support for web servers and concurrent workloads.</li>
 <li><strong>Batteries Included</strong> — Optional FastAPI embeddings server + LangChain/LlamaIndex integrations.</li>
 <li><strong>Production Ready</strong> — Hybrid search (BM25 + vector), metadata filtering, multi-collection support, and automatic hardware acceleration.</li>
 </ul>
@@ -1286,6 +1304,12 @@ pip<span class="w"> </span>install<span class="w"> </span>torch<span class="w"> 
                         <a class="text-2xl font-medium" href="api/core/">
                             
                             VectorDB
+                            
+                        </a>
+                        
+                        <a class="text-2xl font-medium" href="api/async/">
+                            
+                            Async API
                             
                         </a>
                         
