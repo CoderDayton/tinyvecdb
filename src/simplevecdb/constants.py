@@ -69,6 +69,17 @@ USEARCH_DEFAULT_EXPANSION_SEARCH = 64
 # We use a conservative threshold to ensure brute-force is always faster below it.
 USEARCH_BRUTEFORCE_THRESHOLD = 10000
 
+# Memory-mapping threshold: use view() instead of load() above this size
+# For large indexes (>100k vectors), memory-mapping provides:
+# - Instant startup (no full load into RAM)
+# - Lower memory footprint (OS manages page cache)
+# - Slight latency increase for cold pages (acceptable trade-off)
+USEARCH_MMAP_THRESHOLD = 100000
+
+# Batch search threshold: auto-batch queries when > this count
+# usearch batch search provides ~10x throughput for multi-query workloads
+USEARCH_BATCH_THRESHOLD = 10
+
 # Over-fetch multiplier for filtered searches
 # When filtering, we fetch k * FILTER_OVERFETCH_MULTIPLIER candidates
 # and filter down to k results

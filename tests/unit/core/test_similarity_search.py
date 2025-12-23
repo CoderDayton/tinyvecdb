@@ -77,3 +77,51 @@ def test_similarity_search_exact_parameter():
     adaptive_texts = {doc.page_content for doc, _ in results_adaptive}
     # For small collections, adaptive uses exact, so should match
     assert exact_texts == adaptive_texts
+
+
+def test_similarity_search_batch():
+    """Test batch similarity search for multiple queries."""
+    db = VectorDB(":memory:")
+    collection = db.collection("default")
+
+    # Add vectors
+    texts = [f"doc_{i}" for i in range(50)]
+    embs = [[float(i) / 50] * 8 for i in range(50)]
+    collection.add_texts(texts, embeddings=embs)
+
+    # Batch search with multiple queries
+    queries = [
+        [0.1] * 8,  # Should match doc_5
+        [0.5] * 8,  # Should match doc_25
+        [0.9] * 8,  # Should match doc_45
+    ]
+
+    results = collection.similarity_search_batch(queries, k=3)
+
+    # Should return results for each query
+    assert len(results) == 3
+    for query_results in results:
+        assert len(query_results) == 3
+        for doc, dist in query_results:
+            assert isinstance(doc.page_content, str)
+            assert isinstance(dist, float)
+
+    db.close()
+
+
+def test_similarity_search_batch_with_threads():
+    """Test batch search with explicit thread count."""
+    db = VectorDB(":memory:")
+    collection = db.collection("default")
+
+    embs = [[float(i) / 100] * 16 for i in range(100)]
+    collection.add_texts([f"t{i}" for i in range(100)], embeddings=embs)
+
+    queries = [embs[i] for i in range(10)]
+    results = collection.similarity_search_batch(queries, k=5, threads=4)
+
+    assert len(results) == 10
+    for r in results:
+        assert len(r) == 5
+
+    db.close()

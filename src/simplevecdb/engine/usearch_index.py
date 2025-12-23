@@ -119,20 +119,46 @@ class UsearchIndex:
         self._expansion_search = expansion_search
         self._write_lock = threading.Lock()
         self._dirty = False  # Track if index needs saving
+        self._is_view = False  # Track if using memory-mapped view
 
         self._index: Any = None  # usearch.Index, typed as Any for lazy import
         self._load_or_create()
 
     def _load_or_create(self) -> None:
-        """Load existing index or create new one."""
+        """Load existing index or create new one.
+
+        Automatically uses memory-mapping (view) for large indexes to reduce
+        memory footprint and enable instant startup.
+        """
         from usearch.index import Index
+        from .. import constants
 
         if self._path.exists():
-            _logger.debug("Loading existing index from %s", self._path)
-            self._index = Index.restore(str(self._path))
+            # Check file size to decide load vs view
+            file_size = self._path.stat().st_size
+            # Estimate vector count: file_size / (ndim * dtype_size + overhead)
+            # Conservative estimate assuming f32 and ~50 bytes overhead per vector
+            estimated_vectors = file_size // 100  # Very rough estimate
+
+            if estimated_vectors > constants.USEARCH_MMAP_THRESHOLD:
+                # Use memory-mapped view for large indexes
+                _logger.debug(
+                    "Using memory-mapped view for large index: %s", self._path
+                )
+                self._index = Index.restore(str(self._path), view=True)
+                self._is_view = True
+            else:
+                # Load into memory for smaller indexes
+                _logger.debug("Loading index into memory: %s", self._path)
+                self._index = Index.restore(str(self._path), view=False)
+                self._is_view = False
+
             self._ndim = self._index.ndim
             _logger.info(
-                "Loaded index: %d vectors, dim=%d", len(self._index), self._ndim
+                "Loaded index: %d vectors, dim=%d, mmap=%s",
+                len(self._index),
+                self._ndim,
+                self._is_view,
             )
         elif self._ndim is not None:
             self._create_index()
@@ -181,6 +207,15 @@ class UsearchIndex:
             return 0
         return len(self._index)
 
+    @property
+    def is_memory_mapped(self) -> bool:
+        """Whether index is using memory-mapped (view) mode.
+
+        Large indexes (>100k vectors) automatically use memory-mapping
+        for lower memory footprint and instant startup.
+        """
+        return self._is_view
+
     def add(
         self,
         keys: NDArray[np.uint64],
@@ -208,6 +243,14 @@ class UsearchIndex:
 
         # Lazy index creation on first add
         with self._write_lock:
+            # If currently in view mode, need to reload as writable
+            if self._is_view and self._index is not None:
+                _logger.debug("Upgrading from view to writable mode for add operation")
+                from usearch.index import Index
+
+                self._index = Index.restore(str(self._path), view=False)
+                self._is_view = False
+
             if self._index is None:
                 self._ndim = vectors.shape[1]
                 self._create_index()

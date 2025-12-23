@@ -388,6 +388,42 @@ class VectorCollection:
             query, k, filter, exact=exact, threads=threads
         )
 
+    def similarity_search_batch(
+        self,
+        queries: Sequence[Sequence[float]],
+        k: int = 5,
+        filter: dict[str, Any] | None = None,
+        *,
+        exact: bool | None = None,
+        threads: int = 0,
+    ) -> list[list[tuple[Document, float]]]:
+        """
+        Search for similar vectors across multiple queries in parallel.
+
+        Automatically batches queries for ~10x throughput compared to
+        sequential single-query searches. Uses usearch's native batch
+        search optimization.
+
+        Args:
+            queries: List of query vectors.
+            k: Number of nearest neighbors per query.
+            filter: Optional metadata filter (applied to all queries).
+            exact: Force search mode. None=adaptive, True=brute-force, False=HNSW.
+            threads: Number of threads for parallel search (0=auto).
+
+        Returns:
+            List of result lists, one per query. Each result is (Document, distance).
+
+        Example:
+            >>> queries = [embedding1, embedding2, embedding3]
+            >>> results = collection.similarity_search_batch(queries, k=5)
+            >>> for query_results in results:
+            ...     print(f"Found {len(query_results)} matches")
+        """
+        return self._search.similarity_search_batch(
+            queries, k, filter, exact=exact, threads=threads
+        )
+
     def keyword_search(
         self, query: str, k: int = 5, filter: dict[str, Any] | None = None
     ) -> list[tuple[Document, float]]:

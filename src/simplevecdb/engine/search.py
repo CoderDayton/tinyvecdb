@@ -106,6 +106,86 @@ class SearchEngine:
 
         return results
 
+    def similarity_search_batch(
+        self,
+        queries: Sequence[Sequence[float]],
+        k: int = constants.DEFAULT_K,
+        filter: dict[str, Any] | None = None,
+        *,
+        exact: bool | None = None,
+        threads: int = 0,
+    ) -> list[list[tuple[Document, float]]]:
+        """
+        Perform batch vector similarity search for multiple queries.
+
+        Automatically uses usearch's native batch search for ~10x throughput
+        compared to sequential single-query searches.
+
+        Args:
+            queries: List of query vectors
+            k: Number of results per query
+            filter: Optional metadata filter (applied to all queries)
+            exact: Force search mode. None=adaptive, True=brute-force, False=HNSW.
+            threads: Number of threads for parallel search (0=auto)
+
+        Returns:
+            List of result lists, one per query. Each result is (Document, distance).
+        """
+        if not queries:
+            return []
+
+        validate_filter(filter)
+
+        # Stack queries into batch array
+        query_array = np.array(queries, dtype=np.float32)
+
+        # Over-fetch for filtering
+        fetch_k = k * constants.USEARCH_FILTER_OVERFETCH_MULTIPLIER if filter else k
+
+        # Batch search - usearch handles this efficiently
+        keys_batch, distances_batch = self._index.search(
+            query_array, fetch_k, exact=exact, threads=threads
+        )
+
+        # Handle batch results shape: (n_queries, k)
+        if keys_batch.ndim == 1:
+            # Single query case
+            keys_batch = keys_batch.reshape(1, -1)
+            distances_batch = distances_batch.reshape(1, -1)
+
+        # Collect all unique keys for batch document fetch
+        all_keys = set()
+        for keys in keys_batch:
+            all_keys.update(keys.tolist())
+
+        docs_map = self._catalog.get_documents_by_ids(list(all_keys))
+
+        # Build results for each query
+        all_results: list[list[tuple[Document, float]]] = []
+        for query_idx in range(len(queries)):
+            keys = keys_batch[query_idx]
+            dists = distances_batch[query_idx]
+
+            results: list[tuple[Document, float]] = []
+            for key, dist in zip(keys.tolist(), dists.tolist()):
+                if key not in docs_map:
+                    continue
+
+                text, metadata = docs_map[key]
+
+                if filter and not self._matches_filter(metadata, filter):
+                    continue
+
+                doc = Document(page_content=text, metadata=metadata)
+                results.append((doc, float(dist)))
+
+                if len(results) >= k:
+                    break
+
+            all_results.append(results)
+
+        return all_results
+
     def keyword_search(
         self,
         query: str,

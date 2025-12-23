@@ -201,6 +201,10 @@ results = collection.similarity_search(query_vector, k=10, exact=False)
 # Parallel search with explicit thread count
 results = collection.similarity_search(query_vector, k=10, threads=8)
 
+# Batch search - 10x throughput for multiple queries
+queries = [query1, query2, query3]  # List of embedding vectors
+batch_results = collection.similarity_search_batch(queries, k=10)
+
 # Keyword search (BM25)
 results = collection.keyword_search("exact phrase", k=10)
 
