@@ -5,6 +5,73 @@ All notable changes to SimpleVecDB will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-12-23
+
+### Breaking Changes
+
+- **Backend Migration: sqlite-vec → usearch HNSW**
+  - Vector search now uses usearch's high-performance HNSW algorithm
+  - 10-100x faster similarity search for large collections
+  - Vector data stored in separate `.usearch` files per collection (e.g., `mydb.db.default.usearch`)
+  - SQLite still stores metadata, text, and FTS5 index
+  
+- **Removed `DistanceStrategy.L1`** - Manhattan distance not supported by usearch
+
+- **Storage Format Change**
+  - Embeddings now stored in both usearch index AND SQLite (for MMR support)
+  - Existing sqlite-vec databases will auto-migrate on first open
+  - Migration is one-way; backup before upgrading
+
+### Added
+
+- **`usearch_index.py`** - New UsearchIndex wrapper class:
+  - Thread-safe HNSW index operations (lock on writes, lock-free reads)
+  - Automatic persistence to `.usearch` files
+  - Upsert support (removes existing keys before add)
+  - BIT quantization using Hamming metric with bit packing
+  - Configurable HNSW parameters (connectivity, expansion_add, expansion_search)
+
+- **Proper MMR Implementation** - Max Marginal Relevance now computes actual pairwise similarity between candidates and selected documents using stored embeddings
+
+- **Embedding Storage in SQLite** - Embeddings stored as BLOB for:
+  - Accurate MMR diversity computation
+  - Future index rebuild from SQLite backup
+  - Schema auto-migrates existing tables
+
+- **`VectorCollection.rebuild_index()`** - Reconstruct usearch HNSW index from SQLite embeddings:
+  - Useful for index corruption recovery
+  - Tune HNSW parameters (connectivity, expansion_add, expansion_search)
+  - Reclaim space after many deletions
+
+- **`VectorDB.check_migration(path)`** - Dry-run migration check:
+  - Reports which collections need migration
+  - Shows total vector count and estimated storage
+  - Provides detailed rollback instructions
+
+- **Adaptive Search** - Automatically optimizes search strategy based on collection size:
+  - Collections < 10k vectors use brute-force (`exact=True`) for perfect recall
+  - Collections ≥ 10k vectors use HNSW for faster approximate search
+  - Threshold configurable via `constants.USEARCH_BRUTEFORCE_THRESHOLD`
+
+- **`examples/backend_benchmark.py`** - Benchmark script comparing usearch vs brute-force:
+  - Measures speedup, recall, and storage efficiency
+  - Supports all quantization levels
+  - Validates 10-100x performance claims
+
+### Changed
+
+- **Dependencies**: Replaced `sqlite-vec>=0.1.6` with `usearch>=2.12`
+- **CatalogManager**: Removed vec0 virtual table operations, added embedding column
+- **SearchEngine**: Rewrote to use UsearchIndex for all vector operations
+- **VectorCollection**: Creates usearch index at `{db_path}.{collection}.usearch`
+
+### Migration Notes
+
+1. **Backup your database** before upgrading
+2. On first open, existing sqlite-vec data will be migrated automatically
+3. New `.usearch` files will be created alongside your `.db` file
+4. The legacy sqlite-vec table is dropped after successful migration
+
 ## [1.3.0] - 2025-12-07
 
 ### Added

@@ -1,50 +1,56 @@
+"""
+SearchEngine: Vector and hybrid search operations for SimpleVecDB.
+
+Handles similarity search using usearch HNSW index, keyword search using
+SQLite FTS5, and hybrid search combining both with Reciprocal Rank Fusion.
+"""
+
 from __future__ import annotations
 
-import json
 import numpy as np
-from typing import Any, TYPE_CHECKING, Callable
+from typing import Any, TYPE_CHECKING
 from collections.abc import Sequence
 
 from ..types import Document, DistanceStrategy
-from .quantization import normalize_l2
+from ..utils import validate_filter
 from .. import constants
 
 if TYPE_CHECKING:
-    import sqlite3
-    from ..types import Quantization
+    from .usearch_index import UsearchIndex
+    from .catalog import CatalogManager
 
 
 class SearchEngine:
-    """Handles all search operations for a VectorCollection."""
+    """
+    Handles all search operations for a VectorCollection.
+
+    Provides:
+    - Vector similarity search via usearch HNSW index
+    - Keyword search via SQLite FTS5
+    - Hybrid search with Reciprocal Rank Fusion
+    - Max Marginal Relevance (MMR) for diversity
+
+    Args:
+        index: UsearchIndex for vector operations
+        catalog: CatalogManager for metadata/FTS operations
+        distance_strategy: Distance metric for result interpretation
+    """
 
     def __init__(
         self,
-        conn: sqlite3.Connection,
-        table_name: str,
-        vec_table_name: str,
-        fts_table_name: str,
-        fts_enabled: bool,
-        distance_strategy: DistanceStrategy,
-        quantization: Quantization,
-        quantizer: Any,  # QuantizationStrategy
-        dim_getter: Callable[[], int | None],
+        index: UsearchIndex,
+        catalog: CatalogManager,
+        distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
     ):
-        self.conn = conn
-        self._table_name = table_name
-        self._vec_table_name = vec_table_name
-        self._fts_table_name = fts_table_name
-        self._fts_enabled = fts_enabled
-        self.distance_strategy = distance_strategy
-        self.quantization = quantization
-        self._quantizer = quantizer
-        self._get_dim = dim_getter
+        self._index = index
+        self._catalog = catalog
+        self._distance_strategy = distance_strategy
 
     def similarity_search(
         self,
         query: str | Sequence[float],
         k: int = constants.DEFAULT_K,
         filter: dict[str, Any] | None = None,
-        filter_builder: Callable | None = None,
     ) -> list[tuple[Document, float]]:
         """
         Perform vector similarity search.
@@ -53,20 +59,50 @@ class SearchEngine:
             query: Query vector or text (auto-embedded if string)
             k: Number of results to return
             filter: Optional metadata filter
-            filter_builder: Function to build SQL WHERE clause
 
         Returns:
-            List of (Document, distance_score) tuples sorted by distance
+            List of (Document, distance) tuples sorted by distance (lower = more similar)
         """
-        candidates = self._vector_search_candidates(query, k, filter, filter_builder)
-        return self._hydrate_documents(candidates)
+        # Validate filter structure early
+        validate_filter(filter)
+
+        query_vec = self._resolve_query_vector(query)
+
+        # Over-fetch for filtering
+        fetch_k = k * constants.USEARCH_FILTER_OVERFETCH_MULTIPLIER if filter else k
+
+        keys, distances = self._index.search(query_vec, fetch_k)
+
+        if len(keys) == 0:
+            return []
+
+        # Fetch documents and apply filter
+        docs_map = self._catalog.get_documents_by_ids(keys.tolist())
+
+        results: list[tuple[Document, float]] = []
+        for key, dist in zip(keys.tolist(), distances.tolist()):
+            if key not in docs_map:
+                continue
+
+            text, metadata = docs_map[key]
+
+            # Apply metadata filter
+            if filter and not self._matches_filter(metadata, filter):
+                continue
+
+            doc = Document(page_content=text, metadata=metadata)
+            results.append((doc, float(dist)))
+
+            if len(results) >= k:
+                break
+
+        return results
 
     def keyword_search(
         self,
         query: str,
-        k: int = 5,
+        k: int = constants.DEFAULT_K,
         filter: dict[str, Any] | None = None,
-        filter_builder: Callable | None = None,
     ) -> list[tuple[Document, float]]:
         """
         Perform BM25 keyword search using FTS5.
@@ -75,7 +111,6 @@ class SearchEngine:
             query: Text query (supports FTS5 syntax)
             k: Maximum number of results
             filter: Optional metadata filter
-            filter_builder: Function to build SQL WHERE clause
 
         Returns:
             List of (Document, bm25_score) tuples sorted by relevance
@@ -83,20 +118,38 @@ class SearchEngine:
         Raises:
             RuntimeError: If FTS5 not available
         """
-        candidates = self._keyword_search_candidates(query, k, filter, filter_builder)
-        return self._hydrate_documents(candidates)
+        # Validate filter structure early
+        validate_filter(filter)
+
+        candidates = self._catalog.keyword_search(
+            query, k, filter, self._catalog.build_filter_clause
+        )
+
+        if not candidates:
+            return []
+
+        ids = [cid for cid, _ in candidates]
+        docs_map = self._catalog.get_documents_by_ids(ids)
+
+        results: list[tuple[Document, float]] = []
+        for cid, score in candidates:
+            if cid in docs_map:
+                text, metadata = docs_map[cid]
+                doc = Document(page_content=text, metadata=metadata)
+                results.append((doc, float(score)))
+
+        return results
 
     def hybrid_search(
         self,
         query: str,
-        k: int = 5,
+        k: int = constants.DEFAULT_K,
         filter: dict[str, Any] | None = None,
         *,
         query_vector: Sequence[float] | None = None,
         vector_k: int | None = None,
         keyword_k: int | None = None,
-        rrf_k: int = 60,
-        filter_builder: Callable | None = None,
+        rrf_k: int = constants.DEFAULT_RRF_K,
     ) -> list[tuple[Document, float]]:
         """
         Combine vector and keyword search using Reciprocal Rank Fusion.
@@ -109,7 +162,6 @@ class SearchEngine:
             vector_k: Number of vector search candidates
             keyword_k: Number of keyword search candidates
             rrf_k: RRF constant parameter (default: 60)
-            filter_builder: Function to build SQL WHERE clause
 
         Returns:
             List of (Document, rrf_score) tuples sorted by fused score
@@ -117,7 +169,7 @@ class SearchEngine:
         Raises:
             RuntimeError: If FTS5 not available
         """
-        if not self._fts_enabled:
+        if not self._catalog.fts_enabled:
             raise RuntimeError(
                 "hybrid_search requires SQLite compiled with FTS5 support"
             )
@@ -128,306 +180,183 @@ class SearchEngine:
         dense_k = vector_k or max(k, 10)
         sparse_k = keyword_k or max(k, 10)
 
-        vector_input: str | Sequence[float]
-        if query_vector is not None:
-            vector_input = query_vector
-        else:
-            vector_input = query
+        # Vector search
+        vector_input = query_vector if query_vector is not None else query
+        vector_results = self.similarity_search(vector_input, dense_k, filter)
 
-        dense_candidates = self._vector_search_candidates(
-            vector_input, dense_k, filter, filter_builder
-        )
-        sparse_candidates = self._keyword_search_candidates(
-            query, sparse_k, filter, filter_builder
+        # Keyword search
+        keyword_results = self.keyword_search(query, sparse_k, filter)
+
+        # Reciprocal Rank Fusion
+        rrf_scores: dict[str, float] = {}  # Use text as key for deduplication
+        doc_lookup: dict[str, Document] = {}
+
+        for rank, (doc, _) in enumerate(vector_results):
+            key = doc.page_content
+            rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (rrf_k + rank + 1)
+            doc_lookup[key] = doc
+
+        for rank, (doc, _) in enumerate(keyword_results):
+            key = doc.page_content
+            rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (rrf_k + rank + 1)
+            doc_lookup[key] = doc
+
+        # Sort by RRF score
+        sorted_keys = sorted(
+            rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True
         )
 
-        fused_candidates = self._reciprocal_rank_fusion(
-            dense_candidates, sparse_candidates, rrf_k
-        )
+        results: list[tuple[Document, float]] = []
+        for key in sorted_keys[:k]:
+            results.append((doc_lookup[key], rrf_scores[key]))
 
-        return self._hydrate_documents(fused_candidates[:k])
+        return results
 
     def max_marginal_relevance_search(
         self,
         query: str | Sequence[float],
-        k: int = 5,
-        fetch_k: int = 20,
+        k: int = constants.DEFAULT_K,
+        fetch_k: int = constants.DEFAULT_FETCH_K,
         lambda_mult: float = 0.5,
         filter: dict[str, Any] | None = None,
-        filter_builder: Callable | None = None,
     ) -> list[Document]:
         """
         Search with diversity using Max Marginal Relevance algorithm.
+
+        Uses stored embeddings to compute pairwise similarity for diversity.
 
         Args:
             query: Query vector or text (auto-embedded if string)
             k: Number of diverse results to return
             fetch_k: Number of candidates to consider (should be >= k)
-            lambda_mult: Diversity trade-off (0=max diversity, 1=max relevance).
-                Default 0.5 balances both equally.
+            lambda_mult: Diversity trade-off (0=max diversity, 1=max relevance)
             filter: Optional metadata filter
-            filter_builder: Function to build SQL WHERE clause
 
         Returns:
             List of Documents ordered by MMR selection (no scores)
         """
-        candidates_with_scores = self.similarity_search(
-            query, k=fetch_k, filter=filter, filter_builder=filter_builder
+        # Validate filter structure early
+        validate_filter(filter)
+
+        query_vec = self._resolve_query_vector(query)
+
+        # Over-fetch for filtering, then apply MMR
+        actual_fetch = (
+            fetch_k * constants.USEARCH_FILTER_OVERFETCH_MULTIPLIER
+            if filter
+            else fetch_k
         )
-        candidates = [doc for doc, _ in candidates_with_scores]
+
+        keys, distances = self._index.search(query_vec, actual_fetch)
+
+        if len(keys) == 0:
+            return []
+
+        # Fetch documents with embeddings
+        keys_list = keys.tolist()
+        docs_map = self._catalog.get_documents_by_ids(keys_list)
+        embs_map = self._catalog.get_embeddings_by_ids(keys_list)
+
+        # Build candidates list with filtering
+        candidates: list[tuple[int, Document, float, np.ndarray | None]] = []
+        for key, dist in zip(keys_list, distances.tolist()):
+            if key not in docs_map:
+                continue
+
+            text, metadata = docs_map[key]
+
+            # Apply metadata filter
+            if filter and not self._matches_filter(metadata, filter):
+                continue
+
+            doc = Document(page_content=text, metadata=metadata)
+            emb = embs_map.get(key)
+            candidates.append((key, doc, float(dist), emb))
+
+            if len(candidates) >= fetch_k:
+                break
 
         if len(candidates) <= k:
-            return candidates
+            return [doc for _, doc, _, _ in candidates]
 
-        selected = []
-        unselected = candidates.copy()
-        selected.append(unselected.pop(0))
+        # MMR selection with proper pairwise similarity
+        selected: list[Document] = []
+        selected_embs: list[np.ndarray] = []
+        unselected = list(range(len(candidates)))
 
-        while len(selected) < k:
-            mmr_scores = []
-            for candidate in unselected:
-                relevance = next(
-                    score for doc, score in candidates_with_scores if doc == candidate
-                )
-                diversity = min(
-                    next(
-                        score
-                        for doc, score in candidates_with_scores
-                        if doc == selected_doc
-                    )
-                    for selected_doc in selected
-                )
-                mmr_score = lambda_mult * relevance - (1 - lambda_mult) * diversity
-                mmr_scores.append((mmr_score, candidate))
+        # First selection: most relevant (lowest distance)
+        first_idx = unselected.pop(0)
+        _, doc, _, emb = candidates[first_idx]
+        selected.append(doc)
+        if emb is not None:
+            selected_embs.append(emb / (np.linalg.norm(emb) + 1e-12))
 
+        while len(selected) < k and unselected:
+            mmr_scores: list[tuple[float, int]] = []
+
+            for idx in unselected:
+                _, _, dist, emb = candidates[idx]
+
+                # Relevance: convert distance to similarity (lower distance = higher similarity)
+                # For cosine distance in [0, 2], similarity = 1 - distance/2
+                relevance = 1.0 - dist / 2.0
+
+                # Redundancy: max similarity to any already-selected doc
+                redundancy = 0.0
+                if emb is not None and selected_embs:
+                    emb_norm = emb / (np.linalg.norm(emb) + 1e-12)
+                    for sel_emb in selected_embs:
+                        sim = float(np.dot(emb_norm, sel_emb))
+                        redundancy = max(redundancy, sim)
+
+                # MMR: balance relevance vs diversity
+                mmr_score = lambda_mult * relevance - (1 - lambda_mult) * redundancy
+                mmr_scores.append((mmr_score, idx))
+
+            # Pick highest MMR score
             mmr_scores.sort(key=lambda x: x[0], reverse=True)
-            selected.append(mmr_scores[0][1])
-            unselected.remove(mmr_scores[0][1])
+            best_idx = mmr_scores[0][1]
+
+            _, doc, _, emb = candidates[best_idx]
+            selected.append(doc)
+            if emb is not None:
+                selected_embs.append(emb / (np.linalg.norm(emb) + 1e-12))
+            unselected.remove(best_idx)
 
         return selected
 
-    def _vector_search_candidates(
-        self,
-        query: str | Sequence[float],
-        k: int,
-        filter: dict[str, Any] | None,
-        filter_builder: Callable | None = None,
-    ) -> list[tuple[int, float]]:
-        dim = self._get_dim()
-        if dim is None:
-            return []
-
+    def _resolve_query_vector(self, query: str | Sequence[float]) -> np.ndarray:
+        """Convert query to vector, embedding text if necessary."""
         if isinstance(query, str):
             try:
                 from ..embeddings.models import embed_texts
 
                 query_embedding = embed_texts([query])[0]
-                query_vec = np.array(query_embedding, dtype=np.float32)
+                return np.array(query_embedding, dtype=np.float32)
             except Exception as e:
                 raise ValueError(
-                    "Text queries require embeddings – install with [server] extra or provide vector query"
+                    "Text queries require embeddings – install with [server] extra "
+                    "or provide vector query"
                 ) from e
         else:
-            query_vec = np.array(query, dtype=np.float32)
+            return np.array(query, dtype=np.float32)
 
-        if len(query_vec) != dim:
-            raise ValueError(f"Query dim {len(query_vec)} != collection dim {dim}")
+    def _matches_filter(self, metadata: dict[str, Any], filter: dict[str, Any]) -> bool:
+        """Check if metadata matches all filter criteria."""
+        for key, value in filter.items():
+            meta_value = metadata.get(key)
 
-        if self.distance_strategy == DistanceStrategy.COSINE:
-            query_vec = normalize_l2(query_vec)
-
-        blob = self._quantizer.serialize(query_vec)
-
-        if filter_builder:
-            filter_clause, filter_params = filter_builder(
-                filter, metadata_column="ti.metadata"
-            )
-        else:
-            filter_clause, filter_params = "", []
-
-        match_placeholder = "?"
-        if self.quantization.value == "int8":
-            match_placeholder = "vec_int8(?)"
-        elif self.quantization.value == "bit":
-            match_placeholder = "vec_bit(?)"
-
-        try:
-            sql = f"""
-                SELECT ti.id, distance
-                FROM {self._vec_table_name} vi
-                JOIN {self._table_name} ti ON vi.rowid = ti.id
-                WHERE embedding MATCH {match_placeholder}
-                AND k = ?
-                {filter_clause}
-                ORDER BY distance
-            """
-            rows = self.conn.execute(
-                sql, (blob,) + (k,) + tuple(filter_params)
-            ).fetchall()
-        except Exception:
-            # Fall back to brute force
-            from ..core import get_optimal_batch_size
-
-            rows = self._brute_force_search(
-                query_vec, k, filter, filter_builder, get_optimal_batch_size()
-            )
-
-        return [(int(cid), float(dist)) for cid, dist in rows[:k]]
-
-    def _keyword_search_candidates(
-        self,
-        query: str,
-        k: int,
-        filter: dict[str, Any] | None,
-        filter_builder: Callable | None = None,
-    ) -> list[tuple[int, float]]:
-        if not self._fts_enabled:
-            raise RuntimeError(
-                "keyword_search requires SQLite compiled with FTS5 support"
-            )
-        if not query.strip():
-            return []
-
-        if filter_builder:
-            filter_clause, filter_params = filter_builder(
-                filter, metadata_column="ti.metadata"
-            )
-        else:
-            filter_clause, filter_params = "", []
-
-        sql = f"""
-            SELECT ti.id, bm25({self._fts_table_name}) as score
-            FROM {self._fts_table_name} f
-            JOIN {self._table_name} ti ON ti.id = f.rowid
-            WHERE {self._fts_table_name} MATCH ?
-            {filter_clause}
-            ORDER BY score ASC
-            LIMIT ?
-        """
-        params = (query,) + tuple(filter_params) + (k,)
-        rows = self.conn.execute(sql, params).fetchall()
-        return [(int(row[0]), float(row[1])) for row in rows]
-
-    def _reciprocal_rank_fusion(
-        self,
-        dense: Sequence[tuple[int, float]],
-        sparse: Sequence[tuple[int, float]],
-        rrf_k: int,
-    ) -> list[tuple[int, float]]:
-        rank_scores: dict[int, float] = {}
-
-        def _accumulate(items: Sequence[tuple[int, float]]):
-            for rank, (doc_id, _) in enumerate(items):
-                rank_scores[doc_id] = rank_scores.get(doc_id, 0.0) + 1.0 / (
-                    rrf_k + rank + 1
-                )
-
-        _accumulate(dense)
-        _accumulate(sparse)
-
-        fused = sorted(rank_scores.items(), key=lambda kv: kv[1], reverse=True)
-        return [(doc_id, score) for doc_id, score in fused]
-
-    def _brute_force_search(
-        self,
-        query_vec: np.ndarray,
-        k: int,
-        filter: dict[str, Any] | None,
-        filter_builder: Callable | None,
-        batch_size: int,
-    ) -> list[tuple[int, float]]:
-        from ..core import _batched
-        import sqlite3
-
-        try:
-            cursor = self.conn.execute(
-                f"SELECT rowid, embedding FROM {self._vec_table_name}"
-            )
-        except sqlite3.OperationalError:
-            return []
-
-        top_k_candidates: list[tuple[int, float]] = []
-
-        for batch in _batched(cursor, batch_size):
-            if not batch:
-                continue
-
-            ids, blobs = zip(*batch)
-            dim = self._get_dim()
-            vectors = np.array([self._quantizer.deserialize(b, dim) for b in blobs])
-
-            if self.distance_strategy == DistanceStrategy.COSINE:
-                dots = np.dot(vectors, query_vec)
-                norms = np.linalg.norm(vectors, axis=1)
-                similarities = dots / (norms * np.linalg.norm(query_vec) + 1e-12)
-                distances = 1 - similarities
-            elif self.distance_strategy == DistanceStrategy.L2:
-                distances = np.linalg.norm(vectors - query_vec, axis=1)
-            elif self.distance_strategy == DistanceStrategy.L1:
-                distances = np.sum(np.abs(vectors - query_vec), axis=1)
+            if isinstance(value, list):
+                # List filter: meta_value must be in the list
+                if meta_value not in value:
+                    return False
+            elif isinstance(value, str):
+                # String filter: substring match
+                if meta_value is None or value not in str(meta_value):
+                    return False
             else:
-                raise ValueError(
-                    f"Unsupported distance strategy: {self.distance_strategy}"
-                )
+                # Exact match for int/float
+                if meta_value != value:
+                    return False
 
-            for cid, dist in zip(ids, distances):
-                top_k_candidates.append((int(cid), float(dist)))
-
-        top_k_candidates.sort(key=lambda x: x[1])
-        top_k = top_k_candidates[:k]
-
-        # Apply filter if needed
-        if filter and filter_builder:
-            filtered = []
-            ids_to_check = [cid for cid, _ in top_k]
-            if ids_to_check:
-                placeholders = ",".join("?" for _ in ids_to_check)
-                meta_rows = self.conn.execute(
-                    f"SELECT id, metadata FROM {self._table_name} WHERE id IN ({placeholders})",
-                    tuple(ids_to_check),
-                ).fetchall()
-                meta_map = {r[0]: r[1] for r in meta_rows}
-
-                for cid, dist in top_k:
-                    meta_json = meta_map.get(cid)
-                    if meta_json:
-                        import json
-
-                        meta = json.loads(meta_json)
-                        if all(
-                            meta.get(k) == v
-                            if not isinstance(v, list)
-                            else meta.get(k) in v
-                            for k, v in filter.items()
-                        ):
-                            filtered.append((cid, dist))
-                return filtered
-
-        return top_k
-
-    def _hydrate_documents(
-        self, candidates: Sequence[tuple[int, float]]
-    ) -> list[tuple[Document, float]]:
-        """Batch hydrate documents from candidates (single query instead of N+1)."""
-        if not candidates:
-            return []
-
-        # Single batched query instead of N individual queries
-        ids = [cid for cid, _ in candidates]
-        placeholders = ",".join("?" for _ in ids)
-        rows = self.conn.execute(
-            f"SELECT id, text, metadata FROM {self._table_name} WHERE id IN ({placeholders})",
-            tuple(ids),
-        ).fetchall()
-
-        # Build lookup map for O(1) access
-        row_map = {r[0]: (r[1], r[2]) for r in rows}
-
-        # Preserve original order from candidates
-        results: list[tuple[Document, float]] = []
-        for cid, score in candidates:
-            if cid in row_map:
-                text, meta_json = row_map[cid]
-                meta = json.loads(meta_json) if meta_json else {}
-                results.append((Document(page_content=text, metadata=meta), score))
-        return results
+        return True

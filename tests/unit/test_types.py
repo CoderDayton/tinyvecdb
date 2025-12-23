@@ -13,4 +13,4 @@ def test_document_default_metadata_isolated():
 def test_distance_strategy_string_values():
     assert str(DistanceStrategy.COSINE) == "cosine"
     assert DistanceStrategy.L2.value == "l2"
-    assert DistanceStrategy.L1.value == "l1"
+    # Note: L1 removed in v2.0.0 (usearch doesn't support it)

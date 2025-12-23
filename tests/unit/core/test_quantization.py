@@ -34,18 +34,17 @@ def test_normalize_l2_zero_vector():
     assert np.allclose(result, zero_vec)
 
 
-def test_quantization_storage():
-    """Test INT8 quantization storage uses 1 byte per dimension."""
+def test_int8_quantization_search():
+    """Test INT8 quantization works for search."""
     from simplevecdb import VectorDB
 
     db = VectorDB(":memory:", quantization=Quantization.INT8)
     collection = db.collection("default")
-    emb = np.random.randn(100, 128).tolist()
-    collection.add_texts(["t"] * 100, embeddings=emb)
+    emb = np.random.randn(10, 128).tolist()
+    collection.add_texts([f"t{i}" for i in range(10)], embeddings=emb)
 
-    # Manual check serialized is int8
-    blob = db.conn.execute(
-        f"SELECT embedding FROM {collection._vec_table_name} LIMIT 1"
-    ).fetchone()[0]
-    assert len(blob) == 128  # 1 byte/dim
+    # Search should work with INT8 quantization
+    results = collection.similarity_search(emb[0], k=1)
+    assert len(results) == 1
+    assert results[0][0].page_content == "t0"
     db.close()

@@ -21,11 +21,11 @@ class Document:
 
 
 class DistanceStrategy(StrEnum):
-    """Supported distance metrics (matches sqlite-vec exactly)"""
+    """Supported distance metrics for usearch backend."""
 
     COSINE = "cosine"
-    L2 = "l2"  # euclidean
-    L1 = "l1"  # manhattan
+    L2 = "l2"  # euclidean (squared L2 internally)
+    # Note: L1 (manhattan) was removed in v2.0.0 - usearch doesn't support it
 
 
 class Quantization(StrEnum):
