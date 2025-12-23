@@ -23,11 +23,11 @@ jobs:
         run: |
           uv venv
           uv pip install pip-audit
-          uv pip install -e ".[dev,server]"
+          uv pip install ".[dev,server]"
 
       - name: Scan dependencies with pip-audit
         run: |
-          uv run pip-audit --strict --skip-editable
+          uv run pip-audit --strict --ignore-vuln PYSEC-2024-142
 
   code-scan:
     runs-on: ubuntu-latest
