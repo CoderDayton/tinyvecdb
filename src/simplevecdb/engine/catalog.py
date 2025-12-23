@@ -1,7 +1,15 @@
+"""
+CatalogManager: SQLite metadata and FTS operations for SimpleVecDB.
+
+This module handles all SQLite operations for document metadata, text content,
+and full-text search (FTS5). Vector operations are handled by UsearchIndex.
+"""
+
 from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, TYPE_CHECKING, Callable
 from collections.abc import Iterable, Sequence
 
@@ -9,54 +17,53 @@ from ..utils import validate_filter, retry_on_lock
 
 if TYPE_CHECKING:
     import sqlite3
-    from ..types import Quantization, DistanceStrategy
 
 _logger = logging.getLogger("simplevecdb.engine.catalog")
+
+# Regex for safe table names (defense-in-depth)
+_SAFE_TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_table_name(name: str) -> None:
+    """Validate table name to prevent SQL injection (defense-in-depth)."""
+    if not _SAFE_TABLE_NAME_RE.match(name):
+        raise ValueError(
+            f"Invalid table name '{name}'. Must be alphanumeric + underscores, "
+            "starting with a letter or underscore."
+        )
 
 
 class CatalogManager:
     """
-    Handles collection schema and CRUD operations.
+    Handles SQLite metadata and FTS operations.
 
     This manager is responsible for:
     - Creating and managing SQLite tables (metadata and FTS)
-    - Creating and managing sqlite-vec virtual tables
-    - Adding, deleting, and removing documents
+    - Adding, deleting, and removing document metadata
     - Building filter clauses for metadata queries
+    - FTS5 full-text search indexing
+
+    Note: Vector operations are handled by UsearchIndex, not CatalogManager.
 
     Args:
         conn: SQLite database connection
         table_name: Name of the metadata table
-        vec_table_name: Name of the vector index table
         fts_table_name: Name of the full-text search table
-        quantization: Vector quantization strategy
-        distance_strategy: Distance metric for similarity
-        quantizer: QuantizationStrategy instance
-        dim_getter: Callable to get current dimension
-        dim_setter: Callable to set dimension
     """
 
     def __init__(
         self,
         conn: sqlite3.Connection,
         table_name: str,
-        vec_table_name: str,
         fts_table_name: str,
-        quantization: Quantization,
-        distance_strategy: DistanceStrategy,
-        quantizer: Any,
-        dim_getter: Callable[[], int | None],
-        dim_setter: Callable[[int], None],
     ):
+        # Defense-in-depth: validate table names
+        _validate_table_name(table_name)
+        _validate_table_name(fts_table_name)
+
         self.conn = conn
         self._table_name = table_name
-        self._vec_table_name = vec_table_name
         self._fts_table_name = fts_table_name
-        self.quantization = quantization
-        self.distance_strategy = distance_strategy
-        self._quantizer = quantizer
-        self._get_dim = dim_getter
-        self._set_dim = dim_setter
         self._fts_enabled = False
 
     def create_tables(self) -> None:
@@ -66,13 +73,32 @@ class CatalogManager:
             CREATE TABLE IF NOT EXISTS {self._table_name} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 text TEXT NOT NULL,
-                metadata TEXT
+                metadata TEXT,
+                embedding BLOB
             )
             """
         )
+        # Migrate existing tables that lack the embedding column
+        self._ensure_embedding_column()
         self._ensure_fts_table()
 
+    def _ensure_embedding_column(self) -> None:
+        """Add embedding column if missing (migration for v2.0.0)."""
+        try:
+            cursor = self.conn.execute(f"PRAGMA table_info({self._table_name})")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "embedding" not in columns:
+                self.conn.execute(
+                    f"ALTER TABLE {self._table_name} ADD COLUMN embedding BLOB"
+                )
+                _logger.info(
+                    "Migrated table %s: added embedding column", self._table_name
+                )
+        except Exception as e:
+            _logger.warning("Could not check/add embedding column: %s", e)
+
     def _ensure_fts_table(self) -> None:
+        """Create FTS5 virtual table for full-text search."""
         import sqlite3
 
         try:
@@ -84,7 +110,13 @@ class CatalogManager:
             )
             self._fts_enabled = True
         except sqlite3.OperationalError:
+            _logger.warning("FTS5 not available - keyword search disabled")
             self._fts_enabled = False
+
+    @property
+    def fts_enabled(self) -> bool:
+        """Whether FTS5 is available for keyword search."""
+        return self._fts_enabled
 
     def upsert_fts_rows(self, ids: Sequence[int], texts: Sequence[str]) -> None:
         """Update FTS index for given document IDs.
@@ -119,255 +151,251 @@ class CatalogManager:
             tuple(ids),
         )
 
-    def ensure_virtual_table(self, dim: int) -> None:
-        """Create or verify sqlite-vec virtual table with given dimension.
-
-        Args:
-            dim: Vector dimension
-
-        Raises:
-            ValueError: If dimension doesn't match existing table
-        """
-        from ..types import Quantization, DistanceStrategy
-
-        current_dim = self._get_dim()
-        if current_dim is not None and current_dim != dim:
-            raise ValueError(f"Dimension mismatch: existing {current_dim}, got {dim}")
-        if current_dim is None:
-            self._set_dim(dim)
-            self.conn.execute(f"DROP TABLE IF EXISTS {self._vec_table_name}")
-
-            storage_dim = dim
-            if self.quantization == Quantization.BIT:
-                storage_dim = ((dim + 7) // 8) * 8
-
-            vec_type = {
-                Quantization.FLOAT: f"float[{storage_dim}]",
-                Quantization.INT8: f"int8[{storage_dim}]",
-                Quantization.BIT: f"bit[{storage_dim}]",
-            }[self.quantization]
-
-            sql = f"CREATE VIRTUAL TABLE {self._vec_table_name} USING vec0(embedding {vec_type}"
-            if (
-                self.distance_strategy
-                and not vec_type.startswith("bit")
-                and self.distance_strategy != DistanceStrategy.COSINE
-            ):
-                sql += f" distance_metric={self.distance_strategy.value}"
-            sql += ")"
-            self.conn.execute(sql)
-
-    def add_texts(
+    @retry_on_lock(max_retries=5, base_delay=0.1)
+    def add_documents(
         self,
         texts: Sequence[str],
-        metadatas: Sequence[dict] | None,
-        embeddings: Sequence[Sequence[float]] | None,
-        ids: Sequence[int | None] | None,
-        batch_processor: Callable,
+        metadatas: Sequence[dict],
+        ids: Sequence[int | None] | None = None,
+        embeddings: Sequence[Sequence[float]] | None = None,
     ) -> list[int]:
         """
-        Insert or update documents in the collection.
-
-        Handles batched insertion into metadata, vector, and FTS tables.
-        Supports upsert behavior when IDs are provided. Automatically retries
-        on database lock errors with exponential backoff.
+        Insert or update document metadata.
 
         Args:
             texts: Document text content
-            metadatas: Optional metadata dicts
-            embeddings: Optional pre-computed embeddings
-            ids: Optional document IDs for upsert
-            batch_processor: Generator yielding (texts, metadatas, ids, serialized_vectors)
+            metadatas: Metadata dicts for each document
+            ids: Optional document IDs for upsert behavior
+            embeddings: Optional embedding vectors to store
 
         Returns:
-            List of inserted/updated document IDs
+            List of document IDs (rowids)
         """
         if not texts:
             return []
 
         _logger.debug(
-            "Adding %d texts to collection",
+            "Adding %d documents to metadata table",
             len(texts),
-            extra={"table": self._table_name, "count": len(texts)},
+            extra={"table": self._table_name},
         )
 
-        all_ids = []
-        for batch_data in batch_processor(texts, metadatas, embeddings, ids):
-            batch_texts, batch_metadatas, batch_ids, serialized = batch_data
-            batch_real_ids = self._insert_batch(
-                batch_texts, batch_metadatas, batch_ids, serialized
+        import numpy as np
+
+        ids_list = list(ids) if ids else [None] * len(texts)
+
+        # Convert embeddings to bytes if provided
+        embedding_blobs: list[bytes | None] = []
+        if embeddings is not None:
+            for emb in embeddings:
+                arr = np.asarray(emb, dtype=np.float32)
+                embedding_blobs.append(arr.tobytes())
+        else:
+            embedding_blobs = [None] * len(texts)
+
+        rows = [
+            (uid, txt, json.dumps(meta), emb_blob)
+            for uid, txt, meta, emb_blob in zip(
+                ids_list, texts, metadatas, embedding_blobs
             )
-            all_ids.extend(batch_real_ids)
-
-        _logger.debug(
-            "Added %d documents successfully",
-            len(all_ids),
-            extra={"table": self._table_name, "ids": all_ids[:10]},
-        )
-        return all_ids
-
-    @retry_on_lock(max_retries=5, base_delay=0.1)
-    def _insert_batch(
-        self,
-        batch_texts: Sequence[str],
-        batch_metadatas: Sequence[dict],
-        batch_ids: Sequence[int | None],
-        serialized: Sequence[bytes],
-    ) -> list[int]:
-        """
-        Insert a single batch of documents with retry on lock.
-
-        Internal method that handles the actual database writes for a batch.
-        Decorated with @retry_on_lock for automatic retry on lock contention.
-
-        Args:
-            batch_texts: Text content for the batch
-            batch_metadatas: Metadata dicts for the batch
-            batch_ids: Document IDs (may be None for auto-increment)
-            serialized: Serialized vector data
-
-        Returns:
-            List of document IDs for the inserted batch
-        """
-        rows = []
-        for txt, meta, uid in zip(batch_texts, batch_metadatas, batch_ids):
-            rows.append((uid, txt, json.dumps(meta)))
+        ]
 
         with self.conn:
             self.conn.executemany(
                 f"""
-                INSERT INTO {self._table_name}(id, text, metadata)
-                VALUES (?, ?, ?)
+                INSERT INTO {self._table_name}(id, text, metadata, embedding)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     text=excluded.text,
-                    metadata=excluded.metadata
+                    metadata=excluded.metadata,
+                    embedding=excluded.embedding
                 """,
                 rows,
             )
-            batch_real_ids = [
+
+            # Get the actual rowids (handles both insert and upsert)
+            real_ids = [
                 r[0]
                 for r in self.conn.execute(
                     f"SELECT id FROM {self._table_name} ORDER BY id DESC LIMIT ?",
-                    (len(batch_texts),),
+                    (len(texts),),
                 )
             ]
-            batch_real_ids.reverse()
+            real_ids.reverse()
 
-            real_vec_rows = [
-                (real_id, ser) for real_id, ser in zip(batch_real_ids, serialized)
-            ]
+            # Update FTS index
+            self.upsert_fts_rows(real_ids, list(texts))
 
-            insert_placeholder = "?"
-            if self.quantization.value == "int8":
-                insert_placeholder = "vec_int8(?)"
-            elif self.quantization.value == "bit":
-                insert_placeholder = "vec_bit(?)"
-
-            placeholders = ",".join("?" for _ in batch_real_ids)
-            self.conn.execute(
-                f"DELETE FROM {self._vec_table_name} WHERE rowid IN ({placeholders})",
-                tuple(batch_real_ids),
-            )
-
-            self.conn.executemany(
-                f"INSERT INTO {self._vec_table_name}(rowid, embedding) VALUES (?, {insert_placeholder})",
-                real_vec_rows,
-            )
-
-            self.upsert_fts_rows(batch_real_ids, batch_texts)
-
-        return batch_real_ids
+        _logger.debug("Added %d documents, ids=%s", len(real_ids), real_ids[:5])
+        return real_ids
 
     @retry_on_lock(max_retries=5, base_delay=0.1)
-    def delete_by_ids(self, ids: Iterable[int]) -> None:
+    def delete_by_ids(self, ids: Iterable[int]) -> list[int]:
         """
         Delete documents by their IDs.
 
-        Removes documents from metadata, vector index, and FTS tables.
-        Automatically runs VACUUM to reclaim disk space. Retries on
-        database lock errors with exponential backoff.
-
         Args:
             ids: Document IDs to delete
+
+        Returns:
+            List of IDs that were actually deleted
         """
         ids = list(ids)
         if not ids:
-            return
+            return []
 
-        _logger.debug(
-            "Deleting %d documents",
-            len(ids),
-            extra={"table": self._table_name, "ids": ids[:10]},
-        )
+        _logger.debug("Deleting %d documents", len(ids))
 
         placeholders = ",".join("?" for _ in ids)
         params = tuple(ids)
+
         with self.conn:
-            self.conn.execute(
-                f"DELETE FROM {self._table_name} WHERE id IN ({placeholders})",
+            # Check which IDs actually exist
+            existing = self.conn.execute(
+                f"SELECT id FROM {self._table_name} WHERE id IN ({placeholders})",
                 params,
-            )
-            self.conn.execute(
-                f"DELETE FROM {self._vec_table_name} WHERE rowid IN ({placeholders})",
-                params,
-            )
-            self.delete_fts_rows(ids)
-        self.conn.execute("VACUUM")
+            ).fetchall()
+            existing_ids = [r[0] for r in existing]
 
-        _logger.debug(
-            "Deleted %d documents successfully",
-            len(ids),
-            extra={"table": self._table_name},
-        )
+            if existing_ids:
+                placeholders = ",".join("?" for _ in existing_ids)
+                self.conn.execute(
+                    f"DELETE FROM {self._table_name} WHERE id IN ({placeholders})",
+                    tuple(existing_ids),
+                )
+                self.delete_fts_rows(existing_ids)
 
-    def remove_texts(
-        self,
-        texts: Sequence[str] | None,
-        filter: dict[str, Any] | None,
-        filter_builder: Callable,
-    ) -> int:
+        _logger.debug("Deleted %d documents", len(existing_ids))
+        return existing_ids
+
+    def get_documents_by_ids(
+        self, ids: Sequence[int]
+    ) -> dict[int, tuple[str, dict[str, Any]]]:
         """
-        Remove documents by text content or metadata filter.
+        Fetch document text and metadata by IDs.
 
         Args:
-            texts: Optional list of exact text strings to remove
-            filter: Optional metadata filter dict
-            filter_builder: Function to build SQL WHERE clause from filter
+            ids: Document IDs to fetch
 
         Returns:
-            Number of documents deleted
-
-        Raises:
-            ValueError: If neither texts nor filter provided
+            Dict mapping id -> (text, metadata)
         """
-        if texts is None and filter is None:
-            raise ValueError("Must provide either texts or filter to remove")
+        if not ids:
+            return {}
 
-        ids_to_delete: list[int] = []
+        placeholders = ",".join("?" for _ in ids)
+        rows = self.conn.execute(
+            f"SELECT id, text, metadata FROM {self._table_name} WHERE id IN ({placeholders})",
+            tuple(ids),
+        ).fetchall()
 
-        if texts:
-            placeholders = ",".join("?" for _ in texts)
-            rows = self.conn.execute(
-                f"SELECT id FROM {self._table_name} WHERE text IN ({placeholders})",
-                tuple(texts),
-            ).fetchall()
-            ids_to_delete.extend(r[0] for r in rows)
+        result = {}
+        for row_id, text, meta_json in rows:
+            meta = json.loads(meta_json) if meta_json else {}
+            result[row_id] = (text, meta)
+        return result
 
-        if filter:
-            filter_clause, filter_params = filter_builder(filter)
-            filter_clause = filter_clause.replace("AND ", "", 1)
-            where_clause = f"WHERE {filter_clause}" if filter_clause else ""
-            rows = self.conn.execute(
-                f"SELECT id FROM {self._table_name} {where_clause}",
-                tuple(filter_params),
-            ).fetchall()
-            ids_to_delete.extend(r[0] for r in rows)
+    def get_embeddings_by_ids(self, ids: Sequence[int]) -> dict[int, Any]:
+        """
+        Fetch embeddings by document IDs.
 
-        unique_ids = list(set(ids_to_delete))
-        if unique_ids:
-            self.delete_by_ids(unique_ids)
+        Args:
+            ids: Document IDs to fetch
 
-        return len(unique_ids)
+        Returns:
+            Dict mapping id -> numpy array (or None if no embedding stored)
+        """
+        import numpy as np
+
+        if not ids:
+            return {}
+
+        placeholders = ",".join("?" for _ in ids)
+        rows = self.conn.execute(
+            f"SELECT id, embedding FROM {self._table_name} WHERE id IN ({placeholders})",
+            tuple(ids),
+        ).fetchall()
+
+        result: dict[int, np.ndarray | None] = {}
+        for row_id, emb_blob in rows:
+            if emb_blob is not None:
+                result[row_id] = np.frombuffer(emb_blob, dtype=np.float32)
+            else:
+                result[row_id] = None
+        return result
+
+    def find_ids_by_texts(self, texts: Sequence[str]) -> list[int]:
+        """Find document IDs matching exact text content."""
+        if not texts:
+            return []
+        placeholders = ",".join("?" for _ in texts)
+        rows = self.conn.execute(
+            f"SELECT id FROM {self._table_name} WHERE text IN ({placeholders})",
+            tuple(texts),
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def find_ids_by_filter(
+        self,
+        filter_dict: dict[str, Any],
+        filter_builder: Callable[[dict[str, Any], str], tuple[str, list[Any]]],
+    ) -> list[int]:
+        """Find document IDs matching metadata filter."""
+        if not filter_dict:
+            return []
+
+        filter_clause, filter_params = filter_builder(filter_dict, "metadata")
+        # Remove leading "AND " from clause
+        filter_clause = filter_clause.replace("AND ", "", 1)
+        where_clause = f"WHERE {filter_clause}" if filter_clause else ""
+
+        rows = self.conn.execute(
+            f"SELECT id FROM {self._table_name} {where_clause}",
+            tuple(filter_params),
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def keyword_search(
+        self,
+        query: str,
+        k: int,
+        filter_dict: dict[str, Any] | None = None,
+        filter_builder: Callable | None = None,
+    ) -> list[tuple[int, float]]:
+        """
+        Perform BM25 keyword search using FTS5.
+
+        Args:
+            query: Search query (FTS5 syntax supported)
+            k: Maximum results
+            filter_dict: Optional metadata filter
+            filter_builder: Function to build filter clause
+
+        Returns:
+            List of (id, bm25_score) tuples, sorted by relevance
+        """
+        if not self._fts_enabled:
+            raise RuntimeError("FTS5 not available - cannot perform keyword search")
+        if not query.strip():
+            return []
+
+        filter_clause = ""
+        filter_params: list[Any] = []
+        if filter_dict and filter_builder:
+            filter_clause, filter_params = filter_builder(filter_dict, "ti.metadata")
+
+        sql = f"""
+            SELECT ti.id, bm25({self._fts_table_name}) as score
+            FROM {self._fts_table_name} f
+            JOIN {self._table_name} ti ON ti.id = f.rowid
+            WHERE {self._fts_table_name} MATCH ?
+            {filter_clause}
+            ORDER BY score ASC
+            LIMIT ?
+        """
+        params = (query,) + tuple(filter_params) + (k,)
+        rows = self.conn.execute(sql, params).fetchall()
+        return [(int(row[0]), float(row[1])) for row in rows]
 
     def build_filter_clause(
         self, filter_dict: dict[str, Any] | None, metadata_column: str = "metadata"
@@ -392,15 +420,19 @@ class CatalogManager:
         validate_filter(filter_dict)
 
         clauses = []
-        params = []
+        params: list[Any] = []
         for key, value in filter_dict.items():
             json_path = f"$.{key}"
             if isinstance(value, (int, float)):
                 clauses.append(f"json_extract({metadata_column}, ?) = ?")
                 params.extend([json_path, value])
             elif isinstance(value, str):
-                clauses.append(f"json_extract({metadata_column}, ?) LIKE ?")
-                params.extend([json_path, f"%{value}%"])
+                # Escape LIKE special characters to prevent injection
+                escaped_value = (
+                    value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                )
+                clauses.append(f"json_extract({metadata_column}, ?) LIKE ? ESCAPE '\\'")
+                params.extend([json_path, f"%{escaped_value}%"])
             elif isinstance(value, list):
                 placeholders = ",".join("?" for _ in value)
                 clauses.append(
@@ -411,3 +443,55 @@ class CatalogManager:
                 raise ValueError(f"Unsupported filter value type for {key}")
         where = " AND ".join(clauses)
         return f"AND ({where})" if where else "", params
+
+    def count(self) -> int:
+        """Return total number of documents."""
+        row = self.conn.execute(f"SELECT COUNT(*) FROM {self._table_name}").fetchone()
+        return row[0] if row else 0
+
+    def check_legacy_sqlite_vec(self, vec_table_name: str) -> bool:
+        """
+        Check if legacy sqlite-vec tables exist (for migration).
+
+        Args:
+            vec_table_name: Expected name of the old vec0 virtual table
+
+        Returns:
+            True if legacy sqlite-vec data exists
+        """
+        try:
+            row = self.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (vec_table_name,),
+            ).fetchone()
+            return row is not None
+        except Exception:
+            return False
+
+    def get_legacy_vectors(self, vec_table_name: str) -> list[tuple[int, bytes]]:
+        """
+        Extract vectors from legacy sqlite-vec table for migration.
+
+        Args:
+            vec_table_name: Name of the old vec0 virtual table
+
+        Returns:
+            List of (rowid, embedding_blob) tuples
+        """
+        try:
+            rows = self.conn.execute(
+                f"SELECT rowid, embedding FROM {vec_table_name}"
+            ).fetchall()
+            return [(int(r[0]), r[1]) for r in rows]
+        except Exception as e:
+            _logger.warning("Failed to read legacy vectors: %s", e)
+            return []
+
+    def drop_legacy_vec_table(self, vec_table_name: str) -> None:
+        """Drop legacy sqlite-vec table after migration."""
+        try:
+            self.conn.execute(f"DROP TABLE IF EXISTS {vec_table_name}")
+            self.conn.commit()
+            _logger.info("Dropped legacy sqlite-vec table: %s", vec_table_name)
+        except Exception as e:
+            _logger.warning("Failed to drop legacy table %s: %s", vec_table_name, e)

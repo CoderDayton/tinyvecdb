@@ -7,12 +7,12 @@
 
 **The dead-simple, local-first vector database.**
 
-SimpleVecDB brings **Chroma-like simplicity** to a single **SQLite file**. Built on `sqlite-vec`, it offers high-performance vector search, quantization, and zero infrastructure headaches. Perfect for local RAG, offline agents, and indie hackers who need production-grade vector search without the operational overhead.
+SimpleVecDB brings **Chroma-like simplicity** to a single **SQLite file**. Built on `usearch` HNSW indexing, it offers high-performance vector search, quantization, and zero infrastructure headaches. Perfect for local RAG, offline agents, and indie hackers who need production-grade vector search without the operational overhead.
 
 ## Why SimpleVecDB?
 
 - **Zero Infrastructure** — Just a `.db` file. No Docker, no Redis, no cloud bills.
-- **Blazing Fast** — ~2ms queries on consumer hardware with 32x storage efficiency via quantization.
+- **Blazing Fast** — 10-100x faster search via usearch HNSW. Adaptive: brute-force for <10k vectors (perfect recall), HNSW for larger collections.
 - **Truly Portable** — Runs anywhere SQLite runs: Linux, macOS, Windows, even WASM.
 - **Async Ready** — Full async/await support for web servers and concurrent workloads.
 - **Batteries Included** — Optional FastAPI embeddings server + LangChain/LlamaIndex integrations.
@@ -178,8 +178,8 @@ Organize vectors by domain within a single database file:
 from simplevecdb import VectorDB, Quantization
 
 db = VectorDB("app.db")
-users = db.collection("users", quantization=Quantization.INT8)
-products = db.collection("products", quantization=Quantization.BIT)
+users = db.collection("users", quantization=Quantization.FLOAT16)  # 2x memory savings
+products = db.collection("products", quantization=Quantization.BIT)  # 32x compression
 
 # Isolated namespaces
 users.add_texts(["Alice likes hiking"], embeddings=[[0.1]*384])
@@ -189,8 +189,21 @@ products.add_texts(["Hiking boots"], embeddings=[[0.9]*384])
 ### Search Capabilities
 
 ```python
-# Vector similarity (cosine/L2/inner product)
+# Vector similarity (cosine/L2) - adaptive search by default
 results = collection.similarity_search(query_vector, k=10)
+
+# Force exact search for perfect recall (brute-force)
+results = collection.similarity_search(query_vector, k=10, exact=True)
+
+# Force HNSW approximate search (faster, may miss some results)
+results = collection.similarity_search(query_vector, k=10, exact=False)
+
+# Parallel search with explicit thread count
+results = collection.similarity_search(query_vector, k=10, threads=8)
+
+# Batch search - 10x throughput for multiple queries
+queries = [query1, query2, query3]  # List of embedding vectors
+batch_results = collection.similarity_search_batch(queries, k=10)
 
 # Keyword search (BM25)
 results = collection.keyword_search("exact phrase", k=10)
@@ -211,36 +224,37 @@ results = collection.similarity_search(
 
 ## Feature Matrix
 
-| Feature                   | Status | Description                                                |
-| :------------------------ | :----- | :--------------------------------------------------------- |
-| **Single-File Storage**   | ✅     | SQLite `.db` file or in-memory mode                        |
-| **Multi-Collection**      | ✅     | Isolated namespaces per database                           |
-| **Vector Search**         | ✅     | Cosine, Euclidean, Inner Product metrics                   |
-| **Hybrid Search**         | ✅     | BM25 + vector fusion (Reciprocal Rank Fusion)              |
-| **Quantization**          | ✅     | FLOAT32, INT8, BIT (1-bit) for 4-32x compression           |
-| **Metadata Filtering**    | ✅     | SQL `WHERE` clause support                                 |
-| **Framework Integration** | ✅     | LangChain \& LlamaIndex adapters                           |
-| **Hardware Acceleration** | ✅     | Auto-detects CUDA/MPS/CPU                                  |
-| **Local Embeddings**      | ✅     | HuggingFace models via `[server]` extras                   |
-| **HNSW Indexing**         | 🔜     | Approximate nearest neighbor (pending `sqlite-vec` update) |
-| **Built-in Encryption**   | 🔜     | SQLCipher integration for at-rest encryption               |
+| Feature                   | Status | Description                                                  |
+| :------------------------ | :----- | :----------------------------------------------------------- |
+| **Single-File Storage**   | ✅     | SQLite `.db` file or in-memory mode                          |
+| **Multi-Collection**      | ✅     | Isolated namespaces per database                             |
+| **HNSW Indexing**         | ✅     | usearch HNSW for 10-100x faster search                       |
+| **Adaptive Search**       | ✅     | Auto brute-force for <10k vectors, HNSW for larger           |
+| **Vector Search**         | ✅     | Cosine, Euclidean metrics (L1 removed in v2.0)               |
+| **Hybrid Search**         | ✅     | BM25 + vector fusion (Reciprocal Rank Fusion)                |
+| **Quantization**          | ✅     | FLOAT32, FLOAT16, INT8, BIT for 2-32x compression            |
+| **Parallel Operations**   | ✅     | `threads` parameter for add/search                           |
+| **Metadata Filtering**    | ✅     | SQL `WHERE` clause support                                   |
+| **Framework Integration** | ✅     | LangChain \& LlamaIndex adapters                             |
+| **Hardware Acceleration** | ✅     | Auto-detects CUDA/MPS/CPU + SIMD via usearch                 |
+| **Local Embeddings**      | ✅     | HuggingFace models via `[server]` extras                     |
+| **Built-in Encryption**   | 🔜     | SQLCipher integration for at-rest encryption                 |
 
 ## Performance Benchmarks
 
-**Test Environment:** Intel i9-13900K, NVIDIA RTX 4090, `sqlite-vec` v0.1.6
-**Dataset:** 10,000 vectors × 384 dimensions
+**10,000 vectors, 384 dimensions, k=10 search** — [Full benchmarks →](https://coderdayton.github.io/SimpleVecDB/benchmarks)
 
-| Quantization | Storage Size | Insert Speed | Query Latency (k=10) | Compression Ratio |
-| :----------- | :----------- | :----------- | :------------------- | :---------------- |
-| **FLOAT32**  | 15.50 MB     | 15,585 vec/s | 3.55 ms              | 1x (baseline)     |
-| **INT8**     | 4.23 MB      | 27,893 vec/s | 3.93 ms              | 3.7x smaller      |
-| **BIT**      | 0.95 MB      | 32,321 vec/s | 0.27 ms              | 16.3x smaller     |
+| Quantization | Storage  | Query Time | Compression |
+| :----------- | :------- | :--------- | :---------- |
+| FLOAT32      | 36.0 MB  | 0.20 ms    | 1x          |
+| FLOAT16      | 28.7 MB  | 0.20 ms    | 2x          |
+| INT8         | 25.0 MB  | 0.16 ms    | 4x          |
+| BIT          | 21.8 MB  | 0.08 ms    | 32x         |
 
-**Key Takeaways:**
-
-- BIT quantization delivers 13x faster queries with 16x storage reduction
-- INT8 offers balanced performance (79% faster inserts, minimal query overhead)
-- Sub-4ms query latency on consumer hardware
+**Key highlights:**
+- **3-34x faster** than brute-force for collections >10k vectors
+- **Adaptive search**: perfect recall for small collections, HNSW for large
+- **FLOAT16 recommended**: best balance of speed, memory, and precision
 
 ## Documentation
 
@@ -280,14 +294,16 @@ pip install torch --index-url https://download.pytorch.org/whl/cu118
 **Slow Queries on Large Datasets**
 
 - Enable quantization: `collection = db.collection("docs", quantization=Quantization.INT8)`
-- Consider HNSW indexing when available (roadmap item)
+- For >10k vectors, HNSW is automatic; tune with `rebuild_index(connectivity=32)`
+- Use `exact=False` to force HNSW even on smaller collections
 - Use metadata filtering to reduce search space
 
 ## Roadmap
 
 - [x] Hybrid Search (BM25 + Vector)
 - [x] Multi-collection support
-- [ ] HNSW indexing (pending `sqlite-vec` upstream)
+- [x] HNSW indexing (usearch backend)
+- [x] Adaptive search (brute-force/HNSW)
 - [ ] SQLCipher encryption (at-rest data protection)
 - [ ] Streaming insert API for large-scale ingestion
 - [ ] Graph-based metadata relationships

@@ -77,9 +77,8 @@ def test_load_model():
     assert mock_snapshot.call_args.kwargs["repo_id"] == "test/model"
     mock_st_cls.assert_called_once_with(
         "/cache/model-path",
-        model_kwargs={"dtype": "auto", "file_name": "model.onnx"},
         tokenizer_kwargs={"padding": True, "truncation": True, "max_length": 512},
-        backend="onnx",
+        backend="torch",
     )
 
 

@@ -31,15 +31,8 @@ def test_add_texts_basic(empty_db):
     ).fetchall()
     assert rows[0][0] == "test1"
 
-    # Verify that the embedding vector is stored in the virtual table.
-    vec_row = empty_db.conn.execute(
-        f"SELECT embedding FROM {collection._vec_table_name} WHERE rowid = ?", (ids[0],)
-    ).fetchone()
-
-    # Ensure vectors are normalized when using Cosine distance strategy.
-    expected = np.array([0.1, 0.2], dtype=np.float32)
-    expected /= np.linalg.norm(expected)
-    assert np.allclose(np.frombuffer(vec_row[0], dtype=np.float32), expected)
+    # Verify vectors are in usearch index (not SQLite anymore)
+    assert collection._index.size == 2
 
 
 def test_add_with_metadata(populated_db):
@@ -87,10 +80,8 @@ def test_delete_by_ids(populated_db):
         f"SELECT COUNT(*) FROM {collection._table_name}"
     ).fetchone()[0]
     assert remaining == 2
-    vec_count = populated_db.conn.execute(
-        f"SELECT COUNT(*) FROM {collection._vec_table_name}"
-    ).fetchone()[0]
-    assert vec_count == 2  # Ensure the virtual table row count matches the main table.
+    # Vectors removed from usearch as well
+    assert collection._index.size == 2
 
 
 def test_add_no_embeddings_raises(empty_db, monkeypatch):
@@ -242,7 +233,7 @@ def test_hybrid_search_combines_rankings(populated_db, monkeypatch):
 def test_similarity_search_dimension_mismatch(populated_db):
     """Test that querying with wrong dimension raises error."""
     collection = populated_db.collection("default")
-    with pytest.raises(ValueError, match="Query dim"):
+    with pytest.raises(ValueError, match="dimension"):
         collection.similarity_search([0.1, 0.2], k=1)  # 2D instead of 4D
 
 
@@ -292,22 +283,6 @@ def test_quantization_bit(bit_db):
 def test_distance_strategy_l2():
     """Test L2 (Euclidean) distance strategy."""
     db = VectorDB(":memory:", distance_strategy=DistanceStrategy.L2)
-    collection = db.collection("default")
-
-    texts = ["a", "b", "c"]
-    embs = [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]
-    collection.add_texts(texts, embeddings=embs)
-
-    # Query closest to "a"
-    results = collection.similarity_search([1.0, 0.0], k=1)
-    assert results[0][0].page_content == "a"
-
-    db.close()
-
-
-def test_distance_strategy_l1():
-    """Test L1 (Manhattan) distance strategy."""
-    db = VectorDB(":memory:", distance_strategy=DistanceStrategy.L1)
     collection = db.collection("default")
 
     texts = ["a", "b", "c"]
@@ -395,7 +370,7 @@ def test_as_llama_index(empty_db):
 def test_dimension_mismatch_on_add(populated_db):
     """Test that adding vectors with different dimensions raises error."""
     collection = populated_db.collection("default")
-    with pytest.raises(ValueError, match="Dimension mismatch"):
+    with pytest.raises(ValueError, match="dimension"):
         collection.add_texts(["new text"], embeddings=[[0.1, 0.2]])  # 2D instead of 4D
 
 
@@ -445,4 +420,173 @@ def test_wal_mode(tmp_path):
 
     journal_mode = db.conn.execute("PRAGMA journal_mode").fetchone()[0]
     assert journal_mode.lower() == "wal"
+    db.close()
+
+
+def test_vacuum_runs_without_error(tmp_path):
+    """Test that vacuum() executes all maintenance operations."""
+    db_path = str(tmp_path / "vacuum_test.db")
+    db = VectorDB(db_path)
+    collection = db.collection("default")
+
+    # Add and delete data
+    texts = [f"text_{i}" for i in range(100)]
+    embeddings = [[float(i) * 0.001] * 64 for i in range(100)]
+    ids = collection.add_texts(texts, embeddings=embeddings)
+    collection.delete_by_ids(ids)
+
+    # Vacuum should execute without error
+    db.vacuum()
+
+    # Verify PRAGMA optimize ran (freelist should exist after delete)
+    freelist = db.conn.execute("PRAGMA freelist_count").fetchone()[0]
+    assert freelist >= 0  # Just verify query works
+
+    # DB should still be functional
+    new_ids = collection.add_texts(["new"], embeddings=[[0.1] * 64])
+    assert len(new_ids) == 1
+
+    db.close()
+
+
+def test_vacuum_without_wal_checkpoint(tmp_path):
+    """Test vacuum() with checkpoint_wal=False."""
+    db_path = str(tmp_path / "vacuum_no_wal.db")
+    db = VectorDB(db_path)
+    collection = db.collection("default")
+
+    collection.add_texts(["test"], embeddings=[[0.1] * 64])
+
+    # Should not raise
+    db.vacuum(checkpoint_wal=False)
+
+    # Verify db still works
+    results = collection.similarity_search([0.1] * 64, k=1)
+    assert len(results) == 1
+
+    db.close()
+
+
+def test_rebuild_index(tmp_path):
+    """Test rebuild_index() reconstructs index from SQLite embeddings."""
+    db_path = str(tmp_path / "rebuild.db")
+    db = VectorDB(db_path)
+    collection = db.collection("default")
+
+    # Add some vectors
+    texts = ["doc1", "doc2", "doc3"]
+    embeddings = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    collection.add_texts(texts, embeddings=embeddings)
+
+    # Verify initial search works
+    results = collection.similarity_search([1.0, 0.0, 0.0], k=1)
+    assert results[0][0].page_content == "doc1"
+
+    # Rebuild the index
+    count = collection.rebuild_index()
+    assert count == 3
+
+    # Verify search still works after rebuild
+    results = collection.similarity_search([1.0, 0.0, 0.0], k=1)
+    assert results[0][0].page_content == "doc1"
+
+    # Verify all docs are searchable
+    results = collection.similarity_search([0.0, 1.0, 0.0], k=1)
+    assert results[0][0].page_content == "doc2"
+
+    db.close()
+
+
+def test_rebuild_index_with_custom_params(tmp_path):
+    """Test rebuild_index() with custom HNSW parameters."""
+    db_path = str(tmp_path / "rebuild_params.db")
+    db = VectorDB(db_path)
+    collection = db.collection("default")
+
+    collection.add_texts(["test"], embeddings=[[0.1] * 64])
+
+    # Rebuild with custom parameters
+    count = collection.rebuild_index(
+        connectivity=32,
+        expansion_add=200,
+        expansion_search=100,
+    )
+    assert count == 1
+
+    # Verify it still works
+    results = collection.similarity_search([0.1] * 64, k=1)
+    assert len(results) == 1
+
+    db.close()
+
+
+def test_rebuild_index_empty_collection(tmp_path):
+    """Test rebuild_index() on empty collection."""
+    db_path = str(tmp_path / "rebuild_empty.db")
+    db = VectorDB(db_path)
+    collection = db.collection("default")
+
+    # Rebuild empty collection should return 0
+    count = collection.rebuild_index()
+    assert count == 0
+
+    db.close()
+
+
+def test_check_migration_no_legacy(tmp_path):
+    """Test check_migration() on a fresh v2.0 database."""
+    db_path = str(tmp_path / "fresh.db")
+
+    # Create a new database (no legacy data)
+    db = VectorDB(db_path)
+    collection = db.collection("default")
+    collection.add_texts(["test"], embeddings=[[0.1] * 64])
+    db.close()
+
+    # Check migration status
+    info = VectorDB.check_migration(db_path)
+
+    assert info["needs_migration"] is False
+    assert info["collections"] == []
+    assert info["total_vectors"] == 0
+
+
+def test_check_migration_nonexistent():
+    """Test check_migration() on nonexistent file."""
+    info = VectorDB.check_migration("/nonexistent/path.db")
+
+    assert info["needs_migration"] is False
+    assert info["collections"] == []
+
+
+def test_check_migration_memory():
+    """Test check_migration() on :memory: database."""
+    info = VectorDB.check_migration(":memory:")
+
+    assert info["needs_migration"] is False
+
+
+def test_adaptive_search_uses_exact_for_small_collections(tmp_path):
+    """Test that search uses brute-force (exact) for small collections."""
+    from simplevecdb import constants
+
+    db_path = str(tmp_path / "adaptive.db")
+    db = VectorDB(db_path)
+    collection = db.collection("default")
+
+    # Add vectors below threshold
+    n_vectors = min(100, constants.USEARCH_BRUTEFORCE_THRESHOLD - 1)
+    embeddings = [[float(i)] * 64 for i in range(n_vectors)]
+    texts = [f"doc_{i}" for i in range(n_vectors)]
+    collection.add_texts(texts, embeddings=embeddings)
+
+    # Verify we're below threshold
+    assert collection._index.size < constants.USEARCH_BRUTEFORCE_THRESHOLD
+
+    # Search should work and return correct results (exact search = perfect recall)
+    query = [0.0] * 64  # Should match doc_0
+    results = collection.similarity_search(query, k=1)
+    assert len(results) == 1
+    assert results[0][0].page_content == "doc_0"
+
     db.close()

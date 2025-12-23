@@ -8,19 +8,17 @@ from simplevecdb import VectorDB
 
 
 def test_recover_dim_no_match(tmp_path):
-    """Test _recover_dim when SQL doesn't match expected pattern."""
+    """Test dimension recovery when no vectors exist."""
     db_path = tmp_path / "test_recover.db"
     db = VectorDB(str(db_path))
     collection = db.collection("default")
 
-    # _recover_dim is called during __init__ and sets _dim
-    # If pattern doesn't match, _dim remains None and is set on first add
-    # This test just verifies initialization doesn't crash
+    # New collection should have _dim as None until vectors are added
     assert collection._dim is None or isinstance(collection._dim, int)
 
 
 def test_recover_dim_none(tmp_path):
-    """Test _recover_dim when table doesn't exist (returns None)."""
+    """Test dimension is None when no vectors exist."""
     db_path = tmp_path / "test_recover_none.db"
     db = VectorDB(str(db_path))
     collection = db.collection("default")
@@ -29,14 +27,14 @@ def test_recover_dim_none(tmp_path):
     assert collection._dim is None
 
 
-def test_ensure_virtual_table_dimension_mismatch():
-    """Test _ensure_virtual_table raises on dimension mismatch."""
+def test_dimension_mismatch_on_add():
+    """Test adding vectors with mismatched dimensions raises error."""
     db = VectorDB(":memory:")
     collection = db.collection("default")
     collection.add_texts(["test1"], embeddings=[[0.1, 0.2]])  # 2D
 
     # Try to add 3D vector - should raise
-    with pytest.raises(ValueError, match="Dimension mismatch"):
+    with pytest.raises(ValueError, match="dimension"):
         collection.add_texts(["test2"], embeddings=[[0.1, 0.2, 0.3]])
 
 
@@ -73,26 +71,3 @@ def test_close_exception_handling():
         db.__del__()
     except Exception:
         pytest.fail("__del__ should not raise exceptions")
-
-
-def test_recover_dim_exception_handling(tmp_path):
-    """Test _recover_dim handles exceptions gracefully."""
-    from unittest.mock import MagicMock
-
-    db_path = tmp_path / "recover_err.db"
-    db = VectorDB(str(db_path))
-    collection = db.collection("default")
-
-    # Mock connection to raise exception
-    original_conn = db.conn
-    mock_conn = MagicMock()
-    mock_conn.execute.side_effect = Exception("DB Error")
-    db.conn = mock_conn
-    collection.conn = mock_conn
-
-    # Should handle exception gracefully
-    collection._recover_dim()
-
-    # Restore connection to close properly
-    db.conn = original_conn
-    db.close()

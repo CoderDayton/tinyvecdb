@@ -1,27 +1,40 @@
+"""
+SimpleVecDB Core Module.
+
+Provides VectorDB and VectorCollection classes for local vector search
+using usearch HNSW index with SQLite metadata storage.
+"""
+
 from __future__ import annotations
 
-import sqlite3
+import logging
+import os
 import re
+import sqlite3
+import tempfile
 import numpy as np
+import uuid
 from collections.abc import Iterable, Sequence
 from typing import Any, TYPE_CHECKING
-import sqlite_vec  # type: ignore
 from pathlib import Path
 import platform
 import multiprocessing
 import itertools
 
-from .types import Document, DistanceStrategy, Quantization
+from .types import Document, DistanceStrategy, Quantization, MigrationRequiredError
 from .utils import _import_optional
 from .engine.quantization import QuantizationStrategy
 from .engine.search import SearchEngine
 from .engine.catalog import CatalogManager
+from .engine.usearch_index import UsearchIndex
 from . import constants
 
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
     from .integrations.langchain import SimpleVecDBVectorStore
     from .integrations.llamaindex import SimpleVecDBLlamaStore
+
+_logger = logging.getLogger("simplevecdb.core")
 
 
 def _batched(iterable: Iterable[Any], n: int) -> Iterable[Sequence[Any]]:
@@ -57,17 +70,15 @@ def get_optimal_batch_size() -> int:
     if torch is not None:
         # Check for NVIDIA CUDA GPU
         if torch.cuda.is_available():
-            # Get GPU properties
             gpu_props = torch.cuda.get_device_properties(0)
             vram_gb = gpu_props.total_memory / (1024**3)
 
-            # Check VRAM thresholds from high to low
             for vram_threshold, batch_size in sorted(
                 constants.BATCH_SIZE_VRAM_THRESHOLDS.items(), reverse=True
             ):
                 if vram_gb >= vram_threshold:
                     return batch_size
-            return 64  # Fallback for low VRAM
+            return 64
 
         # Check for AMD ROCm GPU
         if hasattr(torch, "hip") and torch.hip.is_available():  # type: ignore
@@ -101,28 +112,23 @@ def get_optimal_batch_size() -> int:
             "CUDAExecutionProvider" in providers
             or "TensorrtExecutionProvider" in providers
         ):
-            # Hard to get VRAM from ORT directly without other libs, assume mid-range
             return 128
         if "DmlExecutionProvider" in providers:
-            # DirectML (Windows AMD/Intel/NVIDIA)
             return 64
         if "CoreMLExecutionProvider" in providers:
-            # Apple CoreML
             return 32
 
-    # 3. CPU fallback - scale with available cores and RAM
+    # 3. CPU fallback
     psutil = _import_optional("psutil")
     if psutil is not None:
-        # Physical cores are better for dense math
         cpu_count = psutil.cpu_count(logical=False) or multiprocessing.cpu_count()
         available_ram_gb = psutil.virtual_memory().available / (1024**3)
     else:
         cpu_count = multiprocessing.cpu_count()
-        available_ram_gb = 8.0  # Assume decent machine
+        available_ram_gb = 8.0
 
     machine = platform.machine().lower()
 
-    # Check for ARM architecture (mobile/embedded)
     if "arm" in machine or "aarch64" in machine:
         if cpu_count <= 4:
             return constants.DEFAULT_ARM_MOBILE_BATCH_SIZE
@@ -131,10 +137,8 @@ def get_optimal_batch_size() -> int:
         else:
             return constants.DEFAULT_ARM_SERVER_BATCH_SIZE
 
-    # x86/x64 CPU
     base_batch = constants.DEFAULT_CPU_FALLBACK_BATCH_SIZE
 
-    # Check core count thresholds from high to low
     for core_threshold, batch_size in sorted(
         constants.CPU_BATCH_SIZE_BY_CORES.items(), reverse=True
     ):
@@ -142,8 +146,6 @@ def get_optimal_batch_size() -> int:
             base_batch = batch_size
             break
 
-    # Constrain by available RAM to avoid swapping
-    # Rough heuristic: reduce batch size if RAM is tight
     if available_ram_gb < 2.0:
         return min(base_batch, 4)
     elif available_ram_gb < 4.0:
@@ -158,9 +160,9 @@ class VectorCollection:
     """
     Represents a single vector collection within the database.
 
-    Handles vector storage, search, and metadata management for a named
-    collection. Uses a facade pattern to delegate operations to specialized
-    engine components (catalog, search, quantization).
+    Handles vector storage via usearch HNSW index and metadata via SQLite.
+    Uses a facade pattern to delegate operations to specialized engine
+    components (catalog, search, usearch_index).
 
     Note:
         Collections are created via `VectorDB.collection()`. Do not instantiate directly.
@@ -169,17 +171,19 @@ class VectorCollection:
     def __init__(
         self,
         conn: sqlite3.Connection,
+        db_path: str,
         name: str,
         distance_strategy: DistanceStrategy,
         quantization: Quantization,
     ):
         self.conn = conn
+        self._db_path = db_path
         self.name = name
         self.distance_strategy = distance_strategy
         self.quantization = quantization
         self._quantizer = QuantizationStrategy(quantization)
 
-        # Sanitize name to prevent SQL injection
+        # Sanitize name to prevent issues
         if not re.match(r"^[a-zA-Z0-9_]+$", name):
             raise ValueError(
                 f"Invalid collection name '{name}'. Must be alphanumeric + underscores."
@@ -188,62 +192,93 @@ class VectorCollection:
         # Table names
         if name == "default":
             self._table_name = "tinyvec_items"
-            self._vec_table_name = "vec_index"
+            self._legacy_vec_table = "vec_index"  # For migration
         else:
             self._table_name = f"items_{name}"
-            self._vec_table_name = f"vectors_{name}"
+            self._legacy_vec_table = f"vectors_{name}"  # For migration
 
         self._fts_table_name = f"{self._table_name}_fts"
-        self._fts_enabled = False
-        self._dim: int | None = None
 
-        # Initialize catalog and search engines
+        # Usearch index path: {db_path}.{collection}.usearch
+        if db_path == ":memory:":
+            self._index_path = None  # In-memory index
+        else:
+            self._index_path = f"{db_path}.{name}.usearch"
+
+        # Initialize components
         self._catalog = CatalogManager(
             conn=self.conn,
             table_name=self._table_name,
-            vec_table_name=self._vec_table_name,
             fts_table_name=self._fts_table_name,
-            quantization=self.quantization,
-            distance_strategy=self.distance_strategy,
-            quantizer=self._quantizer,
-            dim_getter=lambda: self._dim,
-            dim_setter=lambda d: setattr(self, "_dim", d),
         )
-
-        self._search = SearchEngine(
-            conn=self.conn,
-            table_name=self._table_name,
-            vec_table_name=self._vec_table_name,
-            fts_table_name=self._fts_table_name,
-            fts_enabled=False,
-            distance_strategy=self.distance_strategy,
-            quantization=self.quantization,
-            quantizer=self._quantizer,
-            dim_getter=lambda: self._dim,
-        )
-
         self._catalog.create_tables()
-        self._fts_enabled = self._catalog._fts_enabled
-        self._search._fts_enabled = self._catalog._fts_enabled
-        self._recover_dim()
 
-    def _recover_dim(self) -> None:
-        """Attempt to recover dimension from existing virtual table schema."""
+        # Create usearch index
+        self._index = UsearchIndex(
+            index_path=self._index_path
+            or os.path.join(
+                tempfile.gettempdir(), f"simplevecdb_{uuid.uuid4().hex}.usearch"
+            ),
+            ndim=None,  # Will be set on first add
+            distance_strategy=self.distance_strategy,
+            quantization=self.quantization,
+        )
+
+        # Create search engine
+        self._search = SearchEngine(
+            index=self._index,
+            catalog=self._catalog,
+            distance_strategy=self.distance_strategy,
+        )
+
+        # Check for and perform migration from sqlite-vec
+        self._migrate_from_sqlite_vec_if_needed()
+
+    def _migrate_from_sqlite_vec_if_needed(self) -> None:
+        """Auto-migrate from sqlite-vec to usearch on first connection."""
+        if not self._catalog.check_legacy_sqlite_vec(self._legacy_vec_table):
+            return
+
+        _logger.info(
+            "Detected legacy sqlite-vec data in collection '%s'. Migrating to usearch...",
+            self.name,
+        )
+
         try:
-            row = self.conn.execute(
-                "SELECT sql FROM sqlite_master WHERE name = ?", (self._vec_table_name,)
-            ).fetchone()
-            if row and row[0]:
-                match = re.search(r"(?:float|int8|bit)\[(\d+)\]", row[0])
-                if match:
-                    self._dim = int(match.group(1))
-        except Exception:
-            pass
+            # Get legacy vectors
+            legacy_data = self._catalog.get_legacy_vectors(self._legacy_vec_table)
+            if not legacy_data:
+                _logger.warning("No vectors found in legacy table")
+                self._catalog.drop_legacy_vec_table(self._legacy_vec_table)
+                return
 
-    def _build_filter_clause(
-        self, filter_dict: dict[str, Any] | None, metadata_column: str = "metadata"
-    ) -> tuple[str, list[Any]]:
-        return self._catalog.build_filter_clause(filter_dict, metadata_column)
+            # Deserialize and add to usearch
+            keys = []
+            vectors = []
+            for rowid, blob in legacy_data:
+                vec = np.frombuffer(blob, dtype=np.float32)
+                keys.append(rowid)
+                vectors.append(vec)
+
+            keys_arr = np.array(keys, dtype=np.uint64)
+            vectors_arr = np.array(vectors, dtype=np.float32)
+
+            self._index.add(keys_arr, vectors_arr)
+            self._index.save()
+
+            # Drop legacy table
+            self._catalog.drop_legacy_vec_table(self._legacy_vec_table)
+
+            _logger.info(
+                "Migration complete: %d vectors migrated to usearch", len(keys)
+            )
+
+        except Exception as e:
+            _logger.error("Migration failed: %s", e)
+            raise RuntimeError(
+                f"Failed to migrate from sqlite-vec: {e}. "
+                "You may need to manually migrate or restore from backup."
+            ) from e
 
     def add_texts(
         self,
@@ -251,136 +286,142 @@ class VectorCollection:
         metadatas: Sequence[dict] | None = None,
         embeddings: Sequence[Sequence[float]] | None = None,
         ids: Sequence[int | None] | None = None,
+        *,
+        threads: int = 0,
     ) -> list[int]:
         """
         Add texts with optional embeddings and metadata to the collection.
 
         Automatically infers vector dimension from first batch. Supports upsert
         (update on conflict) when providing existing IDs. For COSINE distance,
-        vectors are L2-normalized automatically. Processes in batches for
-        memory efficiency.
+        vectors are L2-normalized automatically by usearch.
 
         Args:
             texts: Document text content to store.
-            metadatas: Optional metadata dicts (one per text). Must be JSON-serializable.
-                If None, uses empty dict for all documents.
+            metadatas: Optional metadata dicts (one per text).
             embeddings: Optional pre-computed embeddings (one per text).
-                If None, attempts to use local embedding model (requires `[server]` extras).
-                All embeddings must have identical dimension.
-            ids: Optional document IDs for upsert behavior. If None, auto-increments.
-                To update existing document, provide its ID.
+                If None, attempts to use local embedding model.
+            ids: Optional document IDs for upsert behavior.
+            threads: Number of threads for parallel insertion (0=auto).
 
         Returns:
-            List of inserted/updated document IDs in same order as input texts.
+            List of inserted/updated document IDs.
 
         Raises:
-            ValueError: If embedding dimensions don't match collection dimension,
-                or if no embeddings provided and local embedder not available.
+            ValueError: If embedding dimensions don't match, or if no embeddings
+                provided and local embedder not available.
         """
+        if not texts:
+            return []
 
-        def batch_processor(texts, metadatas, embeddings, ids):
-            embed_func = None
-            if embeddings is None:
-                try:
-                    from simplevecdb.embeddings.models import embed_texts as embed_fn
+        # Resolve embeddings
+        if embeddings is None:
+            try:
+                from simplevecdb.embeddings.models import embed_texts as embed_fn
 
-                    embed_func = embed_fn
-                except Exception as e:
-                    raise ValueError(
-                        "No embeddings provided and local embedder failed – install with [server] extra"
-                    ) from e
+                embeddings = embed_fn(list(texts))
+            except Exception as e:
+                raise ValueError(
+                    "No embeddings provided and local embedder failed – "
+                    "install with [server] extra"
+                ) from e
 
-            from simplevecdb import config
+        # Normalize metadatas
+        if metadatas is None:
+            metadatas = [{} for _ in texts]
 
-            n_total = len(texts)
-            batch_size = config.EMBEDDING_BATCH_SIZE
+        # Process in batches
+        from simplevecdb import config
 
-            metas_it = metadatas if metadatas else ({} for _ in range(n_total))
-            ids_it = ids if ids else (None for _ in range(n_total))
+        batch_size = config.EMBEDDING_BATCH_SIZE
+        all_ids: list[int] = []
 
-            combined: Iterable[Any]
-            if embeddings:
-                combined = zip(texts, metas_it, ids_it, embeddings)
-            else:
-                combined = zip(texts, metas_it, ids_it)
+        for batch_start in range(0, len(texts), batch_size):
+            batch_end = min(batch_start + batch_size, len(texts))
+            batch_texts = texts[batch_start:batch_end]
+            batch_metas = metadatas[batch_start:batch_end]
+            batch_embeds = embeddings[batch_start:batch_end]
+            batch_ids = ids[batch_start:batch_end] if ids else None
 
-            for batch in _batched(combined, batch_size):
-                unzipped = list(zip(*batch))
-                batch_texts = list(unzipped[0])
-                batch_metadatas = list(unzipped[1])
-                batch_ids = list(unzipped[2])
+            # Add to SQLite metadata store (with embeddings for MMR support)
+            doc_ids = self._catalog.add_documents(
+                batch_texts, list(batch_metas), batch_ids, embeddings=batch_embeds
+            )
 
-                batch_embeddings: Sequence[float] | Sequence[list[float]] | Any
-                if embeddings:
-                    batch_embeddings = list(unzipped[3])
-                else:
-                    assert embed_func is not None
-                    batch_embeddings = embed_func(list(batch_texts))
+            # Prepare vectors
+            emb_np = np.array(batch_embeds, dtype=np.float32)
 
-                if self._dim is None:
-                    first_emb = batch_embeddings[0]
-                    if isinstance(first_emb, (list, tuple)):
-                        dim = len(first_emb)
-                    elif isinstance(first_emb, np.ndarray):
-                        dim = len(first_emb)
-                    else:
-                        dim = len(list(first_emb))  # type: ignore
-                    self._catalog.ensure_virtual_table(dim)
-                else:
-                    first_emb = batch_embeddings[0]
-                    if isinstance(first_emb, (list, tuple)):
-                        first_dim = len(first_emb)
-                    elif isinstance(first_emb, np.ndarray):
-                        first_dim = len(first_emb)
-                    else:
-                        first_dim = len(list(first_emb))  # type: ignore
-                    if first_dim != self._dim:
-                        raise ValueError(
-                            f"Dimension mismatch: existing {self._dim}, got {first_dim}"
-                        )
+            # Add to usearch index
+            self._index.add(np.array(doc_ids, dtype=np.uint64), emb_np, threads=threads)
 
-                emb_np = np.array(batch_embeddings, dtype=np.float32)
-                if self.distance_strategy == DistanceStrategy.COSINE:
-                    norms = np.linalg.norm(emb_np, axis=1, keepdims=True)
-                    emb_np = emb_np / np.maximum(norms, 1e-12)
+            all_ids.extend(doc_ids)
 
-                serialized = [self._quantizer.serialize(vec) for vec in emb_np]
-
-                yield (batch_texts, batch_metadatas, batch_ids, serialized)
-
-        return self._catalog.add_texts(
-            texts, metadatas, embeddings, ids, batch_processor
-        )
+        return all_ids
 
     def similarity_search(
         self,
         query: str | Sequence[float],
         k: int = 5,
         filter: dict[str, Any] | None = None,
+        *,
+        exact: bool | None = None,
+        threads: int = 0,
     ) -> list[tuple[Document, float]]:
         """
-        Search for most similar vectors using distance metric.
+        Search for most similar vectors using HNSW approximate nearest neighbor.
 
-        Performs approximate nearest neighbor (ANN) search using sqlite-vec's
-        vector index. For COSINE distance, returns 1 - cosine_similarity
-        (range 0-2, lower is more similar). Supports metadata filtering via
-        JSON path queries.
+        For COSINE distance, returns distance in [0, 2] (lower = more similar).
+        For L2/L1, returns raw distance (lower = more similar).
 
         Args:
-            query: Query vector or text string.
-                If string, auto-embeds using local model (requires `[server]` extras).
-                If vector, must match collection dimension.
+            query: Query vector or text string (auto-embedded if string).
             k: Number of nearest neighbors to return.
-            filter: Optional metadata filter using JSON path syntax.
-                Supports equality (int/float), substring match (str), and list membership.
-                Multiple filters combined with AND logic.
+            filter: Optional metadata filter.
+            exact: Force search mode. None=adaptive (brute-force for <10k vectors),
+                   True=always brute-force (perfect recall), False=always HNSW.
+            threads: Number of threads for parallel search (0=auto).
 
         Returns:
-            List of (Document, distance_score) tuples, sorted by ascending distance.
-            Document contains `page_content` (text) and `metadata` (dict).
+            List of (Document, distance) tuples, sorted by ascending distance.
         """
         return self._search.similarity_search(
-            query, k, filter, filter_builder=self._build_filter_clause
+            query, k, filter, exact=exact, threads=threads
+        )
+
+    def similarity_search_batch(
+        self,
+        queries: Sequence[Sequence[float]],
+        k: int = 5,
+        filter: dict[str, Any] | None = None,
+        *,
+        exact: bool | None = None,
+        threads: int = 0,
+    ) -> list[list[tuple[Document, float]]]:
+        """
+        Search for similar vectors across multiple queries in parallel.
+
+        Automatically batches queries for ~10x throughput compared to
+        sequential single-query searches. Uses usearch's native batch
+        search optimization.
+
+        Args:
+            queries: List of query vectors.
+            k: Number of nearest neighbors per query.
+            filter: Optional metadata filter (applied to all queries).
+            exact: Force search mode. None=adaptive, True=brute-force, False=HNSW.
+            threads: Number of threads for parallel search (0=auto).
+
+        Returns:
+            List of result lists, one per query. Each result is (Document, distance).
+
+        Example:
+            >>> queries = [embedding1, embedding2, embedding3]
+            >>> results = collection.similarity_search_batch(queries, k=5)
+            >>> for query_results in results:
+            ...     print(f"Found {len(query_results)} matches")
+        """
+        return self._search.similarity_search_batch(
+            queries, k, filter, exact=exact, threads=threads
         )
 
     def keyword_search(
@@ -389,26 +430,20 @@ class VectorCollection:
         """
         Search using BM25 keyword ranking (full-text search).
 
-        Uses SQLite's FTS5 (Full-Text Search) extension for BM25-based ranking.
-        Best for exact phrase matching, keyword queries, and complementing
-        vector search. Requires SQLite compiled with FTS5 support.
+        Uses SQLite's FTS5 extension for BM25-based ranking.
 
         Args:
             query: Text query using FTS5 syntax.
-                Supports: "exact phrase", term1 OR term2, term1 NOT term2, prefix*
             k: Maximum number of results to return.
-            filter: Optional metadata filter (same syntax as similarity_search).
+            filter: Optional metadata filter.
 
         Returns:
             List of (Document, bm25_score) tuples, sorted by descending relevance.
-            Higher BM25 scores indicate better matches.
 
         Raises:
-            RuntimeError: If FTS5 is not available (SQLite not compiled with FTS5).
+            RuntimeError: If FTS5 is not available.
         """
-        return self._search.keyword_search(
-            query, k, filter, filter_builder=self._build_filter_clause
-        )
+        return self._search.keyword_search(query, k, filter)
 
     def hybrid_search(
         self,
@@ -424,31 +459,20 @@ class VectorCollection:
         """
         Combine BM25 keyword search with vector similarity using Reciprocal Rank Fusion.
 
-        Hybrid search fetches candidates from both keyword (BM25) and vector search,
-        then merges rankings using RRF algorithm. This provides best-of-both-worlds:
-        exact phrase matching (keyword) + semantic similarity (vector). Particularly
-        effective for queries with specific terms AND semantic intent.
-
         Args:
-            query: Text query for keyword search. Required (cannot be empty).
+            query: Text query for keyword search.
             k: Final number of results after fusion.
-            filter: Optional metadata filter applied to both search methods.
+            filter: Optional metadata filter.
             query_vector: Optional pre-computed query embedding.
-                If None, auto-embeds `query` using local model.
-            vector_k: Number of vector search candidates (default: max(k, 10)).
-                Higher values improve recall at cost of latency.
-            keyword_k: Number of keyword search candidates (default: max(k, 10)).
+            vector_k: Number of vector search candidates.
+            keyword_k: Number of keyword search candidates.
             rrf_k: RRF constant parameter (default: 60).
-                Lower values favor top-ranked results, higher values distribute scores evenly.
-                Typical range: 10-100.
 
         Returns:
             List of (Document, rrf_score) tuples, sorted by descending RRF score.
-            RRF score combines rankings from both methods (higher is better).
 
         Raises:
             RuntimeError: If FTS5 is not available.
-            ValueError: If query is empty string.
         """
         return self._search.hybrid_search(
             query,
@@ -458,7 +482,6 @@ class VectorCollection:
             vector_k=vector_k,
             keyword_k=keyword_k,
             rrf_k=rrf_k,
-            filter_builder=self._build_filter_clause,
         )
 
     def max_marginal_relevance_search(
@@ -466,57 +489,45 @@ class VectorCollection:
         query: str | Sequence[float],
         k: int = 5,
         fetch_k: int = 20,
+        lambda_mult: float = 0.5,
         filter: dict[str, Any] | None = None,
     ) -> list[Document]:
         """
         Search with diversity - return relevant but non-redundant results.
 
-        Max Marginal Relevance (MMR) balances relevance to query with diversity
-        among results. Prevents returning many near-duplicate documents by
-        penalizing selections similar to already-selected results. Useful for
-        exploratory search, summarization, and reducing redundancy.
-
-        Algorithm:
-        1. Fetch `fetch_k` most relevant candidates
-        2. Iteratively select documents maximizing: 0.5*relevance - 0.5*max_similarity_to_selected
-        3. Continue until `k` documents selected
-
         Args:
-            query: Query vector or text string (auto-embedded if string).
+            query: Query vector or text string.
             k: Number of diverse results to return.
-            fetch_k: Number of relevant candidates to consider (should be >= k).
-                Higher values increase diversity at cost of latency.
-                Typical: 2-5x larger than k.
+            fetch_k: Number of candidates to consider.
+            lambda_mult: Diversity trade-off (0=diverse, 1=relevant).
             filter: Optional metadata filter.
 
         Returns:
-            List of Documents (no scores), ordered by MMR selection.
-            First result is most relevant, subsequent results balance relevance + diversity.
+            List of Documents ordered by MMR selection.
         """
         return self._search.max_marginal_relevance_search(
-            query, k, fetch_k, filter, filter_builder=self._build_filter_clause
-        )
-
-    def _brute_force_search(
-        self,
-        query_vec: np.ndarray,
-        k: int,
-        filter: dict[str, Any] | None,
-    ) -> list[tuple[int, float]]:
-        return self._search._brute_force_search(
-            query_vec, k, filter, self._build_filter_clause, get_optimal_batch_size()
+            query, k, fetch_k, lambda_mult, filter
         )
 
     def delete_by_ids(self, ids: Iterable[int]) -> None:
         """
         Delete documents by their IDs.
 
-        Removes documents from all tables and runs VACUUM to reclaim space.
+        Removes documents from both usearch index and SQLite metadata.
+        Does NOT auto-vacuum; call `VectorDB.vacuum()` separately.
 
         Args:
             ids: Document IDs to delete
         """
-        self._catalog.delete_by_ids(ids)
+        ids_list = list(ids)
+        if not ids_list:
+            return
+
+        # Delete from usearch
+        self._index.remove(ids_list)
+
+        # Delete from SQLite
+        self._catalog.delete_by_ids(ids_list)
 
     def remove_texts(
         self,
@@ -536,15 +547,146 @@ class VectorCollection:
         Raises:
             ValueError: If neither texts nor filter provided
         """
-        return self._catalog.remove_texts(texts, filter, self._build_filter_clause)
+        if texts is None and filter is None:
+            raise ValueError("Must provide either texts or filter to remove")
+
+        ids_to_delete: list[int] = []
+
+        if texts:
+            ids_to_delete.extend(self._catalog.find_ids_by_texts(texts))
+
+        if filter:
+            ids_to_delete.extend(
+                self._catalog.find_ids_by_filter(
+                    filter, self._catalog.build_filter_clause
+                )
+            )
+
+        unique_ids = list(set(ids_to_delete))
+        if unique_ids:
+            self.delete_by_ids(unique_ids)
+
+        return len(unique_ids)
+
+    def save(self) -> None:
+        """Save the usearch index to disk."""
+        self._index.save()
+
+    def rebuild_index(
+        self,
+        *,
+        connectivity: int | None = None,
+        expansion_add: int | None = None,
+        expansion_search: int | None = None,
+    ) -> int:
+        """
+        Rebuild the usearch HNSW index from embeddings stored in SQLite.
+
+        Useful for:
+        - Recovering from index corruption
+        - Tuning HNSW parameters (connectivity, expansion)
+        - Reclaiming space after many deletions
+
+        Args:
+            connectivity: HNSW M parameter (edges per node). Default: 16
+            expansion_add: efConstruction (build quality). Default: 128
+            expansion_search: ef (search quality). Default: 64
+
+        Returns:
+            Number of vectors rebuilt
+
+        Raises:
+            RuntimeError: If no embeddings found in SQLite
+        """
+        _logger.info("Rebuilding usearch index for collection '%s'...", self.name)
+
+        # Get all document IDs
+        all_ids = self.conn.execute(f"SELECT id FROM {self._table_name}").fetchall()
+        all_ids = [row[0] for row in all_ids]
+
+        if not all_ids:
+            _logger.warning("No documents found in collection")
+            return 0
+
+        # Fetch embeddings from SQLite
+        embeddings_map = self._catalog.get_embeddings_by_ids(all_ids)
+
+        # Filter to only docs with embeddings
+        valid_pairs = [
+            (doc_id, emb)
+            for doc_id in all_ids
+            if (emb := embeddings_map.get(doc_id)) is not None
+        ]
+
+        if not valid_pairs:
+            raise RuntimeError(
+                "No embeddings found in SQLite. Cannot rebuild index. "
+                "This may happen if documents were added before v2.0.0."
+            )
+
+        keys = np.array([doc_id for doc_id, _ in valid_pairs], dtype=np.uint64)
+        vectors = np.array([emb for _, emb in valid_pairs], dtype=np.float32)
+
+        # Determine dimension
+        ndim = vectors.shape[1]
+
+        # Close old index
+        old_path = self._index._path
+        self._index.close()
+
+        # Delete old index file
+        if old_path.exists():
+            old_path.unlink()
+            _logger.debug("Deleted old index file: %s", old_path)
+
+        # Create new index with optional custom parameters
+        from .engine.usearch_index import (
+            DEFAULT_CONNECTIVITY,
+            DEFAULT_EXPANSION_ADD,
+            DEFAULT_EXPANSION_SEARCH,
+        )
+
+        self._index = UsearchIndex(
+            index_path=str(old_path),
+            ndim=ndim,
+            distance_strategy=self.distance_strategy,
+            quantization=self.quantization,
+            connectivity=connectivity or DEFAULT_CONNECTIVITY,
+            expansion_add=expansion_add or DEFAULT_EXPANSION_ADD,
+            expansion_search=expansion_search or DEFAULT_EXPANSION_SEARCH,
+        )
+
+        # Re-add all vectors
+        self._index.add(keys, vectors)
+        self._index.save()
+
+        # Update search engine reference
+        self._search._index = self._index
+
+        _logger.info("Rebuilt index with %d vectors", len(keys))
+        return len(keys)
+
+    def count(self) -> int:
+        """Return the number of documents in the collection."""
+        return self._catalog.count()
+
+    @property
+    def _dim(self) -> int | None:
+        """Vector dimension (None if no vectors added yet)."""
+        return self._index.ndim
 
 
 class VectorDB:
     """
-    Dead-simple local vector database powered by sqlite-vec.
+    Dead-simple local vector database powered by usearch HNSW.
 
-    A single SQLite file can contain multiple isolated vector collections.
-    Provides Chroma-like API with built-in quantization for storage efficiency.
+    SQLite stores metadata and text; usearch stores vectors in separate
+    .usearch files per collection. Provides Chroma-like API with built-in
+    quantization for storage efficiency.
+
+    Storage layout:
+    - {path} - SQLite database (metadata, text, FTS)
+    - {path}.{collection}.usearch - usearch HNSW index per collection
     """
 
     def __init__(
@@ -552,72 +694,78 @@ class VectorDB:
         path: str | Path = ":memory:",
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
         quantization: Quantization = Quantization.FLOAT,
+        *,
+        auto_migrate: bool = False,
     ):
         """Initialize the vector database.
 
         Args:
             path: Database file path or ":memory:" for in-memory database.
-                Creates file if it doesn't exist.
             distance_strategy: Default distance metric for similarity search.
-                COSINE: Normalized dot product (range: 0-2, lower is more similar).
-                L2: Euclidean distance (unbounded, lower is more similar).
-                L1: Manhattan distance (unbounded, lower is more similar).
             quantization: Default vector compression strategy.
-                FLOAT: Full 32-bit precision, no compression.
-                INT8: 8-bit quantization, ~4x storage reduction.
-                BIT: 1-bit quantization, ~32x storage reduction.
+            auto_migrate: If True, automatically migrate v1.x sqlite-vec data
+                to usearch. If False (default), raise MigrationRequiredError
+                when legacy data is detected. Use check_migration() to preview.
+
+        Raises:
+            MigrationRequiredError: If auto_migrate=False and legacy sqlite-vec
+                data is detected. Contains details about what needs migration.
         """
         self.path = str(path)
         self.distance_strategy = distance_strategy
         self.quantization = quantization
+        self.auto_migrate = auto_migrate
+        self._collections: dict[str, VectorCollection] = {}
 
-        self.conn = sqlite3.connect(self.path, check_same_thread=False)
+        self.conn = sqlite3.connect(self.path, check_same_thread=False, timeout=30.0)
         self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.enable_load_extension(True)
-        try:
-            sqlite_vec.load(self.conn)
-            self._extension_available = True
-        except sqlite3.OperationalError:
-            self._extension_available = False
+        self.conn.execute("PRAGMA synchronous=NORMAL")
 
-        self.conn.enable_load_extension(False)
+        # Check for required migration before allowing collection access
+        if not auto_migrate and self.path != ":memory:":
+            migration_info = VectorDB.check_migration(self.path)
+            if migration_info["needs_migration"]:
+                self.conn.close()
+                raise MigrationRequiredError(
+                    path=self.path,
+                    collections=migration_info["collections"],
+                    total_vectors=migration_info["total_vectors"],
+                    migration_info=migration_info,
+                )
 
     def collection(
         self,
-        name: str,
+        name: str = "default",
         distance_strategy: DistanceStrategy | None = None,
         quantization: Quantization | None = None,
     ) -> VectorCollection:
         """
         Get or create a named collection.
 
-        Collections provide isolated namespaces within a single database file.
-        Each collection has its own vector index and can use different
-        quantization/distance settings. Collection names must be alphanumeric
-        with underscores only (validates against SQL injection).
+        Collections provide isolated namespaces within a single database.
+        Each collection has its own usearch index file.
 
         Args:
-            name: Collection name. Must match pattern `^[a-zA-Z0-9_]+$`.
-                Special name "default" uses legacy table names for backward
-                compatibility.
-            distance_strategy: Override database-level distance metric for this
-                collection only. If None, uses database default.
-            quantization: Override database-level quantization for this collection.
-                If None, uses database default. Note: Cannot change quantization
-                after first insert.
+            name: Collection name (alphanumeric + underscore only).
+            distance_strategy: Override database-level distance metric.
+            quantization: Override database-level quantization.
 
         Returns:
-            VectorCollection instance ready for add/search operations.
+            VectorCollection instance.
 
         Raises:
             ValueError: If collection name contains invalid characters.
         """
-        return VectorCollection(
-            self.conn,
-            name,
-            distance_strategy or self.distance_strategy,
-            quantization or self.quantization,
-        )
+        cache_key = name
+        if cache_key not in self._collections:
+            self._collections[cache_key] = VectorCollection(
+                conn=self.conn,
+                db_path=self.path,
+                name=name,
+                distance_strategy=distance_strategy or self.distance_strategy,
+                quantization=quantization or self.quantization,
+            )
+        return self._collections[cache_key]
 
     # ------------------------------------------------------------------ #
     # Integrations
@@ -625,16 +773,7 @@ class VectorDB:
     def as_langchain(
         self, embeddings: Embeddings | None = None, collection_name: str = "default"
     ) -> SimpleVecDBVectorStore:
-        """
-        Return a LangChain-compatible vector store interface.
-
-        Args:
-            embeddings: Optional LangChain Embeddings model
-            collection_name: Name of the collection to use
-
-        Returns:
-            SimpleVecDBVectorStore instance
-        """
+        """Return a LangChain-compatible vector store interface."""
         from .integrations.langchain import SimpleVecDBVectorStore
 
         return SimpleVecDBVectorStore(
@@ -642,15 +781,7 @@ class VectorDB:
         )
 
     def as_llama_index(self, collection_name: str = "default") -> SimpleVecDBLlamaStore:
-        """
-        Return a LlamaIndex-compatible vector store interface.
-
-        Args:
-            collection_name: Name of the collection to use
-
-        Returns:
-            SimpleVecDBLlamaStore instance
-        """
+        """Return a LlamaIndex-compatible vector store interface."""
         from .integrations.llamaindex import SimpleVecDBLlamaStore
 
         return SimpleVecDBLlamaStore(db_path=self.path, collection_name=collection_name)
@@ -658,15 +789,149 @@ class VectorDB:
     # ------------------------------------------------------------------ #
     # Convenience
     # ------------------------------------------------------------------ #
-    def close(self) -> None:
+    @staticmethod
+    def check_migration(path: str | Path) -> dict[str, Any]:
         """
-        Close the database connection.
+        Check if a database needs migration from sqlite-vec (dry-run).
 
-        Flushes any pending writes and releases database locks.
+        Use this before opening a v1.x database to understand what will
+        be migrated. Does not modify the database.
+
+        Args:
+            path: Path to the SQLite database file
+
+        Returns:
+            Dict with migration info:
+            - needs_migration: bool
+            - collections: list of collection names with legacy data
+            - total_vectors: estimated total vector count
+            - estimated_size_mb: approximate usearch index size
+            - rollback_notes: instructions for reverting if needed
+
+        Example:
+            >>> info = VectorDB.check_migration("mydb.db")
+            >>> if info["needs_migration"]:
+            ...     print(f"Will migrate {info['total_vectors']} vectors")
+            ...     print(info["rollback_notes"])
         """
+        path = str(path)
+        if path == ":memory:" or not Path(path).exists():
+            return {
+                "needs_migration": False,
+                "collections": [],
+                "total_vectors": 0,
+                "estimated_size_mb": 0.0,
+                "rollback_notes": "",
+            }
+
+        conn = sqlite3.connect(path, check_same_thread=False)
+        try:
+            # Check for legacy sqlite-vec tables
+            tables = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+            table_names = {t[0] for t in tables}
+
+            legacy_collections = []
+            total_vectors = 0
+            total_bytes = 0
+
+            # Check default collection
+            if "vec_index" in table_names:
+                try:
+                    count = conn.execute("SELECT COUNT(*) FROM vec_index").fetchone()[0]
+                    if count > 0:
+                        legacy_collections.append("default")
+                        total_vectors += count
+                        # Estimate: rowid(8) + embedding blob
+                        row = conn.execute(
+                            "SELECT embedding FROM vec_index LIMIT 1"
+                        ).fetchone()
+                        if row and row[0]:
+                            dim = len(row[0]) // 4
+                            total_bytes += count * dim * 4  # float32
+                except Exception:
+                    pass
+
+            # Check named collections (vectors_{name})
+            for table in table_names:
+                if table.startswith("vectors_") and table != "vec_index":
+                    collection_name = table[8:]  # Remove "vectors_" prefix
+                    try:
+                        count = conn.execute(
+                            f"SELECT COUNT(*) FROM {table}"
+                        ).fetchone()[0]
+                        if count > 0:
+                            legacy_collections.append(collection_name)
+                            total_vectors += count
+                            row = conn.execute(
+                                f"SELECT embedding FROM {table} LIMIT 1"
+                            ).fetchone()
+                            if row and row[0]:
+                                dim = len(row[0]) // 4
+                                total_bytes += count * dim * 4
+                    except Exception:
+                        pass
+
+            estimated_mb = total_bytes / (1024 * 1024)
+
+            rollback_notes = ""
+            if legacy_collections:
+                rollback_notes = f"""
+MIGRATION ROLLBACK INSTRUCTIONS:
+================================
+1. BEFORE upgrading, backup your database:
+   cp {path} {path}.backup
+
+2. If migration fails or you need to revert:
+   - Delete the new .usearch files: {path}.*.usearch
+   - Restore from backup: cp {path}.backup {path}
+   - Downgrade to simplevecdb<2.0.0
+
+3. After successful migration, the legacy sqlite-vec tables are dropped.
+   Keep your backup until you've verified the migration worked correctly.
+
+4. New storage layout after migration:
+   - {path} (SQLite: metadata, text, FTS, embeddings)
+   - {path}.<collection>.usearch (usearch HNSW index per collection)
+"""
+
+            return {
+                "needs_migration": len(legacy_collections) > 0,
+                "collections": legacy_collections,
+                "total_vectors": total_vectors,
+                "estimated_size_mb": round(estimated_mb, 2),
+                "rollback_notes": rollback_notes.strip(),
+            }
+        finally:
+            conn.close()
+
+    def vacuum(self, checkpoint_wal: bool = True) -> None:
+        """
+        Reclaim disk space by rebuilding the SQLite database file.
+
+        Note: This only affects SQLite metadata storage. Usearch indexes
+        don't support in-place compaction; use rebuild_index() for that.
+
+        Args:
+            checkpoint_wal: If True (default), also truncate the WAL file.
+        """
+        if checkpoint_wal:
+            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        self.conn.execute("VACUUM")
+        self.conn.execute("PRAGMA optimize")
+
+    def save(self) -> None:
+        """Save all collection indexes to disk."""
+        for collection in self._collections.values():
+            collection.save()
+
+    def close(self) -> None:
+        """Close the database connection and save indexes."""
+        self.save()
         self.conn.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:

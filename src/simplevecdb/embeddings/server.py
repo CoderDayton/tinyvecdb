@@ -1,17 +1,76 @@
 from __future__ import annotations
 
+import logging
 import time
 from collections import defaultdict
 from threading import Lock
 from typing import Any, Literal
 
 import uvicorn
-from fastapi import Depends, FastAPI, Header, HTTPException, Security
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from .models import DEFAULT_MODEL, embed_texts
 from simplevecdb.config import config
+
+_logger = logging.getLogger("simplevecdb.embeddings.server")
+
+
+# Simple in-memory rate limiter
+class RateLimiter:
+    """Token bucket rate limiter per IP/identity with TTL cleanup."""
+
+    def __init__(
+        self,
+        requests_per_minute: int = 60,
+        burst: int = 10,
+        ttl_seconds: int = 3600,
+        max_buckets: int = 10000,
+    ):
+        self._lock = Lock()
+        self._buckets: dict[str, dict[str, float]] = {}
+        self._rate = requests_per_minute / 60.0  # tokens per second
+        self._burst = burst
+        self._ttl = ttl_seconds
+        self._max_buckets = max_buckets
+        self._last_cleanup = time.time()
+
+    def _cleanup_stale(self, now: float) -> None:
+        """Remove buckets not accessed within TTL. Called under lock."""
+        stale_keys = [
+            k for k, v in self._buckets.items() if now - v["last"] > self._ttl
+        ]
+        for k in stale_keys:
+            del self._buckets[k]
+
+    def is_allowed(self, identity: str) -> bool:
+        """Check if request is allowed and consume a token."""
+        now = time.time()
+        with self._lock:
+            # Periodic cleanup: every TTL/4 seconds or if bucket count exceeds limit
+            if (
+                now - self._last_cleanup > self._ttl / 4
+                or len(self._buckets) > self._max_buckets
+            ):
+                self._cleanup_stale(now)
+                self._last_cleanup = now
+
+            if identity not in self._buckets:
+                self._buckets[identity] = {"tokens": self._burst, "last": now}
+
+            bucket = self._buckets[identity]
+            elapsed = now - bucket["last"]
+            bucket["tokens"] = min(self._burst, bucket["tokens"] + elapsed * self._rate)
+            bucket["last"] = now
+
+            if bucket["tokens"] >= 1:
+                bucket["tokens"] -= 1
+                return True
+            return False
+
+
+rate_limiter = RateLimiter(requests_per_minute=100, burst=20)
 
 app = FastAPI(
     title="SimpleVecDB Embeddings",
@@ -164,7 +223,9 @@ class EmbeddingResponse(BaseModel):
 
 @app.post("/v1/embeddings")
 async def create_embeddings(
-    request: EmbeddingRequest, api_identity: str = Depends(authenticate_request)
+    request: EmbeddingRequest,
+    raw_request: Request,
+    api_identity: str = Depends(authenticate_request),
 ) -> EmbeddingResponse:
     """
     Create embeddings for the input text(s).
@@ -175,6 +236,16 @@ async def create_embeddings(
     Returns:
         EmbeddingResponse with vector data.
     """
+    # Rate limit by IP or API key
+    rate_key = (
+        api_identity
+        if api_identity != "anonymous"
+        else (raw_request.client.host if raw_request.client else "unknown")
+    )
+    if not rate_limiter.is_allowed(rate_key):
+        raise HTTPException(
+            status_code=429, detail="Rate limit exceeded. Try again later."
+        )
     if isinstance(request.input, str):
         texts = [request.input]
     elif isinstance(request.input, list) and all(
@@ -208,7 +279,12 @@ async def create_embeddings(
                 texts, model_id=repo_id, batch_size=effective_batch
             )
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Embedding failed: {str(e)}")
+            # Log the full error internally but return generic message
+            _logger.exception("Embedding failed: %s", e)
+            raise HTTPException(
+                status_code=500,
+                detail="Embedding operation failed. Check server logs for details.",
+            )
 
     # Fake token usage (optional – some tools expect it)
     total_tokens = sum(len(t.split()) for t in texts)
@@ -273,4 +349,19 @@ def run_server(host: str | None = None, port: int | None = None) -> None:
 
     host = host or config.SERVER_HOST
     port = port or config.SERVER_PORT
+
+    # Security warnings
+    if not config.EMBEDDING_SERVER_API_KEYS:
+        _logger.warning(
+            "⚠️  No API keys configured (EMBEDDING_SERVER_API_KEYS is empty). "
+            "Server is running without authentication. "
+            "Set EMBEDDING_SERVER_API_KEYS for production use."
+        )
+    if host == "0.0.0.0":
+        _logger.warning(
+            "⚠️  Server binding to all interfaces (0.0.0.0). "
+            "This exposes the server to the network. "
+            "Use 127.0.0.1 for local-only access."
+        )
+
     uvicorn.run(app, host=host, port=port, log_level="info")

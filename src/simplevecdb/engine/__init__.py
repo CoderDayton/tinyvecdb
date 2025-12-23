@@ -3,5 +3,6 @@
 from .catalog import CatalogManager
 from .search import SearchEngine
 from .quantization import QuantizationStrategy
+from .usearch_index import UsearchIndex
 
-__all__ = ["CatalogManager", "SearchEngine", "QuantizationStrategy"]
+__all__ = ["CatalogManager", "SearchEngine", "QuantizationStrategy", "UsearchIndex"]

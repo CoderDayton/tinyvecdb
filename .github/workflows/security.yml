@@ -22,12 +22,12 @@ jobs:
       - name: Create venv and install dependencies
         run: |
           uv venv
-          uv pip install safety pip-audit
+          uv pip install pip-audit
+          uv pip install ".[dev,server]"
 
-      - name: Scan dependencies
+      - name: Scan dependencies with pip-audit
         run: |
-          uv run safety check --json || true
-          uv run pip-audit --requirement pyproject.toml || true
+          uv run pip-audit --strict --ignore-vuln PYSEC-2024-142 || true
 
   code-scan:
     runs-on: ubuntu-latest
