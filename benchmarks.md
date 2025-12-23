@@ -1,49 +1,49 @@
 # Benchmarks
 
-## v2.0 HNSW Benchmarks (usearch v2.12+)
+## Test Environment
 
-**Model**: Snowflake/snowflake-arctic-embed-xs  
 **Hardware**: Intel i9-13900K, 64GB RAM  
-**Backend**: usearch HNSW
+**Backend**: usearch HNSW v2.12+  
+**Vectors**: 384 dimensions (Snowflake/snowflake-arctic-embed-xs)
 
-### 100,000 Vectors (384 dimensions)
+## Search Speed (k=10)
 
-| Quantization | Storage Size | Insert Speed | Query (k=10) | vs Brute-Force | Recall@10 |
-| ------------ | ------------ | ------------ | ------------ | -------------- | --------- |
-| FLOAT32      | 153 MB       | 45,000 vec/s | 0.8 ms       | 48x faster     | 99.1%     |
-| FLOAT16      | 77 MB        | 52,000 vec/s | 0.5 ms       | 78x faster     | 98.9%     |
-| INT8         | 42 MB        | 58,000 vec/s | 0.4 ms       | 98x faster     | 97.5%     |
-| BIT          | 9 MB         | 65,000 vec/s | 0.2 ms       | 10x faster     | 89.2%     |
+Comparison of usearch HNSW approximate search vs brute-force exact search:
 
-### 1,000,000 Vectors (384 dimensions)
+| Collection Size | usearch (ms) | Brute-force (ms) | Speedup | Recall@10 |
+| :-------------- | :----------- | :--------------- | :------ | :-------- |
+| **1,000**       | 0.11         | 0.11             | 1.0x    | 1.00      |
+| **5,000**       | 0.33         | 0.34             | 1.0x    | 1.00      |
+| **10,000**      | 0.23         | 0.82             | 3.6x    | 1.00      |
+| **50,000**      | 0.26         | 4.67             | 18x     | 0.70      |
+| **100,000**     | 0.27         | 9.18             | 34x     | 0.60      |
 
-| Quantization | Storage Size | Insert Speed | Query (k=10) | vs Brute-Force | Recall@10 |
-| ------------ | ------------ | ------------ | ------------ | -------------- | --------- |
-| FLOAT32      | 1.5 GB       | 38,000 vec/s | 1.2 ms       | 320x faster    | 98.8%     |
-| FLOAT16      | 768 MB       | 44,000 vec/s | 0.8 ms       | 480x faster    | 98.5%     |
-| INT8         | 416 MB       | 50,000 vec/s | 0.6 ms       | 640x faster    | 96.8%     |
-| BIT          | 86 MB        | 58,000 vec/s | 0.3 ms       | 30x faster     | 85.1%     |
+> **Note**: Collections <10k use adaptive brute-force for perfect recall by default.
 
-### Batch Search Performance
+## Storage Efficiency (Quantization)
 
-| Batch Size | Sequential Time | Batch Time | Speedup |
-| ---------- | --------------- | ---------- | ------- |
-| 10         | 8.0 ms          | 1.2 ms     | 6.7x    |
-| 100        | 80.0 ms         | 8.5 ms     | 9.4x    |
-| 1000       | 800.0 ms        | 72.0 ms    | 11.1x   |
+10,000 vectors at 384 dimensions:
 
-Use `similarity_search_batch()` for multi-query workloads.
+| Quantization  | Total Size | Query Latency | Vector Compression | Notes                           |
+| :------------ | :--------- | :------------ | :----------------- | :------------------------------ |
+| **FLOAT32**   | 36.0 MB    | 0.20 ms       | 1x (baseline)      | Full precision                  |
+| **FLOAT16**   | 28.7 MB    | 0.20 ms       | 2x                 | Best balance for most use cases |
+| **INT8**      | 25.0 MB    | 0.16 ms       | 4x                 | Good for memory-constrained     |
+| **BIT**       | 21.8 MB    | 0.08 ms       | 32x                | Fastest, Hamming distance       |
+
+> **Note**: Total size includes SQLite metadata + HNSW graph structure (~21MB overhead). Pure vector storage follows theoretical compression ratios.
 
 ## Adaptive Search Behavior
 
 SimpleVecDB v2.0 automatically selects the optimal search strategy:
 
-| Collection Size | Default Strategy | Rationale |
-| --------------- | ---------------- | --------- |
+| Collection Size | Default Strategy | Rationale                              |
+| --------------- | ---------------- | -------------------------------------- |
 | < 10,000        | Brute-force      | Perfect recall, HNSW overhead not worth it |
-| ≥ 10,000        | HNSW             | 10-100x faster, >97% recall |
+| ≥ 10,000        | HNSW             | 3-34x faster, tunable recall           |
 
 Override with the `exact` parameter:
+
 ```python
 # Force brute-force (perfect recall)
 results = collection.similarity_search(query, k=10, exact=True)
@@ -52,25 +52,38 @@ results = collection.similarity_search(query, k=10, exact=True)
 results = collection.similarity_search(query, k=10, exact=False)
 ```
 
+## Batch Search Performance
+
+Use `similarity_search_batch()` for multi-query workloads:
+
+| Batch Size | Sequential Time | Batch Time | Speedup |
+| ---------- | --------------- | ---------- | ------- |
+| 10         | 2.0 ms          | 0.5 ms     | 4x      |
+| 100        | 20.0 ms         | 3.0 ms     | 7x      |
+| 1000       | 200.0 ms        | 25.0 ms    | 8x      |
+
+```python
+queries = [query1, query2, query3]  # List of embedding vectors
+batch_results = collection.similarity_search_batch(queries, k=10)
+```
+
 ## Memory-Mapping Behavior
 
-Large indexes automatically use memory-mapped mode:
+Large indexes automatically use memory-mapped mode for instant startup:
 
 | Collection Size | Mode | Startup Time | Memory Usage |
 | --------------- | ---- | ------------ | ------------ |
 | < 100,000       | Load | ~50ms        | Full index   |
 | ≥ 100,000       | Mmap | ~1ms         | On-demand    |
 
-Memory-mapped indexes load instantly and only read pages as needed.
-
 ## Quantization Guide
 
-| Quantization | Bits/Dim | Memory | Speed | Recall | Best For |
-| ------------ | -------- | ------ | ----- | ------ | -------- |
-| FLOAT32      | 32       | 1x     | 1x    | 100%   | Maximum precision |
-| FLOAT16      | 16       | 0.5x   | 1.5x  | ~99%   | Balanced (recommended) |
-| INT8         | 8        | 0.25x  | 2x    | ~97%   | Memory-constrained |
-| BIT          | 1        | 0.03x  | 3x    | ~85%   | Massive scale, initial filtering |
+| Quantization | Bits/Dim | Memory | Speed | Recall | Best For                     |
+| ------------ | -------- | ------ | ----- | ------ | ---------------------------- |
+| FLOAT32      | 32       | 1x     | 1x    | 100%   | Maximum precision            |
+| FLOAT16      | 16       | 0.5x   | 1x    | ~99%   | Balanced (recommended)       |
+| INT8         | 8        | 0.25x  | 1.2x  | ~97%   | Memory-constrained           |
+| BIT          | 1        | 0.03x  | 2.5x  | ~85%   | Massive scale, fast filtering|
 
 ## Legacy Benchmarks (v1.x with sqlite-vec)
 
@@ -101,6 +114,9 @@ pip install "simplevecdb[server]"
 # Run the backend benchmark
 python examples/backend_benchmark.py
 
-# Run quantization benchmark
+# Run quantization benchmark  
 python examples/quant_benchmark.py
+
+# Run full performance benchmark
+python examples/embeddings/perf_benchmark.py
 ```

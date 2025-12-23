@@ -838,7 +838,7 @@
 <script>
     const updatedAt = document.getElementById("updated_at");
     if (updatedAt) {
-        const date = new Date('2025-12-23T05:33:50-06:00');
+        const date = new Date('2025-12-23T05:53:54-06:00');
         updatedAt.textContent = date.toLocaleDateString();
     }
 </script>
@@ -846,136 +846,109 @@
     </div>
   </div>
   <div class="typography w-full flex-1 *:data-[slot=alert]:first:mt-0">
-    <h2 id="v20-hnsw-benchmarks-usearch-v212">v2.0 HNSW Benchmarks (usearch v2.12+)</h2>
-<p><strong>Model</strong>: Snowflake/snowflake-arctic-embed-xs<br />
-<strong>Hardware</strong>: Intel i9-13900K, 64GB RAM<br />
-<strong>Backend</strong>: usearch HNSW</p>
-<h3 id="100000-vectors-384-dimensions">100,000 Vectors (384 dimensions)</h3>
+    <h2 id="test-environment">Test Environment</h2>
+<p><strong>Hardware</strong>: Intel i9-13900K, 64GB RAM<br />
+<strong>Backend</strong>: usearch HNSW v2.12+<br />
+<strong>Vectors</strong>: 384 dimensions (Snowflake/snowflake-arctic-embed-xs)</p>
+<h2 id="search-speed-k10">Search Speed (k=10)</h2>
+<p>Comparison of usearch HNSW approximate search vs brute-force exact search:</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
-<th>Quantization</th>
-<th>Storage Size</th>
-<th>Insert Speed</th>
-<th>Query (k=10)</th>
-<th>vs Brute-Force</th>
-<th>Recall@10</th>
+<th style="text-align: left;">Collection Size</th>
+<th style="text-align: left;">usearch (ms)</th>
+<th style="text-align: left;">Brute-force (ms)</th>
+<th style="text-align: left;">Speedup</th>
+<th style="text-align: left;">Recall@10</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>FLOAT32</td>
-<td>153 MB</td>
-<td>45,000 vec/s</td>
-<td>0.8 ms</td>
-<td>48x faster</td>
-<td>99.1%</td>
+<td style="text-align: left;"><strong>1,000</strong></td>
+<td style="text-align: left;">0.11</td>
+<td style="text-align: left;">0.11</td>
+<td style="text-align: left;">1.0x</td>
+<td style="text-align: left;">1.00</td>
 </tr>
 <tr>
-<td>FLOAT16</td>
-<td>77 MB</td>
-<td>52,000 vec/s</td>
-<td>0.5 ms</td>
-<td>78x faster</td>
-<td>98.9%</td>
+<td style="text-align: left;"><strong>5,000</strong></td>
+<td style="text-align: left;">0.33</td>
+<td style="text-align: left;">0.34</td>
+<td style="text-align: left;">1.0x</td>
+<td style="text-align: left;">1.00</td>
 </tr>
 <tr>
-<td>INT8</td>
-<td>42 MB</td>
-<td>58,000 vec/s</td>
-<td>0.4 ms</td>
-<td>98x faster</td>
-<td>97.5%</td>
+<td style="text-align: left;"><strong>10,000</strong></td>
+<td style="text-align: left;">0.23</td>
+<td style="text-align: left;">0.82</td>
+<td style="text-align: left;">3.6x</td>
+<td style="text-align: left;">1.00</td>
 </tr>
 <tr>
-<td>BIT</td>
-<td>9 MB</td>
-<td>65,000 vec/s</td>
-<td>0.2 ms</td>
-<td>10x faster</td>
-<td>89.2%</td>
+<td style="text-align: left;"><strong>50,000</strong></td>
+<td style="text-align: left;">0.26</td>
+<td style="text-align: left;">4.67</td>
+<td style="text-align: left;">18x</td>
+<td style="text-align: left;">0.70</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>100,000</strong></td>
+<td style="text-align: left;">0.27</td>
+<td style="text-align: left;">9.18</td>
+<td style="text-align: left;">34x</td>
+<td style="text-align: left;">0.60</td>
 </tr>
 </tbody>
 </table></div>
-<h3 id="1000000-vectors-384-dimensions">1,000,000 Vectors (384 dimensions)</h3>
+<blockquote>
+<p><strong>Note</strong>: Collections &lt;10k use adaptive brute-force for perfect recall by default.</p>
+</blockquote>
+<h2 id="storage-efficiency-quantization">Storage Efficiency (Quantization)</h2>
+<p>10,000 vectors at 384 dimensions:</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
-<th>Quantization</th>
-<th>Storage Size</th>
-<th>Insert Speed</th>
-<th>Query (k=10)</th>
-<th>vs Brute-Force</th>
-<th>Recall@10</th>
+<th style="text-align: left;">Quantization</th>
+<th style="text-align: left;">Total Size</th>
+<th style="text-align: left;">Query Latency</th>
+<th style="text-align: left;">Vector Compression</th>
+<th style="text-align: left;">Notes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>FLOAT32</td>
-<td>1.5 GB</td>
-<td>38,000 vec/s</td>
-<td>1.2 ms</td>
-<td>320x faster</td>
-<td>98.8%</td>
+<td style="text-align: left;"><strong>FLOAT32</strong></td>
+<td style="text-align: left;">36.0 MB</td>
+<td style="text-align: left;">0.20 ms</td>
+<td style="text-align: left;">1x (baseline)</td>
+<td style="text-align: left;">Full precision</td>
 </tr>
 <tr>
-<td>FLOAT16</td>
-<td>768 MB</td>
-<td>44,000 vec/s</td>
-<td>0.8 ms</td>
-<td>480x faster</td>
-<td>98.5%</td>
+<td style="text-align: left;"><strong>FLOAT16</strong></td>
+<td style="text-align: left;">28.7 MB</td>
+<td style="text-align: left;">0.20 ms</td>
+<td style="text-align: left;">2x</td>
+<td style="text-align: left;">Best balance for most use cases</td>
 </tr>
 <tr>
-<td>INT8</td>
-<td>416 MB</td>
-<td>50,000 vec/s</td>
-<td>0.6 ms</td>
-<td>640x faster</td>
-<td>96.8%</td>
+<td style="text-align: left;"><strong>INT8</strong></td>
+<td style="text-align: left;">25.0 MB</td>
+<td style="text-align: left;">0.16 ms</td>
+<td style="text-align: left;">4x</td>
+<td style="text-align: left;">Good for memory-constrained</td>
 </tr>
 <tr>
-<td>BIT</td>
-<td>86 MB</td>
-<td>58,000 vec/s</td>
-<td>0.3 ms</td>
-<td>30x faster</td>
-<td>85.1%</td>
+<td style="text-align: left;"><strong>BIT</strong></td>
+<td style="text-align: left;">21.8 MB</td>
+<td style="text-align: left;">0.08 ms</td>
+<td style="text-align: left;">32x</td>
+<td style="text-align: left;">Fastest, Hamming distance</td>
 </tr>
 </tbody>
 </table></div>
-<h3 id="batch-search-performance">Batch Search Performance</h3>
-<div class="table-wrapper"><table>
-<thead>
-<tr>
-<th>Batch Size</th>
-<th>Sequential Time</th>
-<th>Batch Time</th>
-<th>Speedup</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>10</td>
-<td>8.0 ms</td>
-<td>1.2 ms</td>
-<td>6.7x</td>
-</tr>
-<tr>
-<td>100</td>
-<td>80.0 ms</td>
-<td>8.5 ms</td>
-<td>9.4x</td>
-</tr>
-<tr>
-<td>1000</td>
-<td>800.0 ms</td>
-<td>72.0 ms</td>
-<td>11.1x</td>
-</tr>
-</tbody>
-</table></div>
-<p>Use <code>similarity_search_batch()</code> for multi-query workloads.</p>
+<blockquote>
+<p><strong>Note</strong>: Total size includes SQLite metadata + HNSW graph structure (~21MB overhead). Pure vector storage follows theoretical compression ratios.</p>
+</blockquote>
 <h2 id="adaptive-search-behavior">Adaptive Search Behavior</h2>
 <p>SimpleVecDB v2.0 automatically selects the optimal search strategy:</p>
 <div class="table-wrapper"><table>
@@ -995,7 +968,7 @@
 <tr>
 <td>≥ 10,000</td>
 <td>HNSW</td>
-<td>10-100x faster, &gt;97% recall</td>
+<td>3-34x faster, tunable recall</td>
 </tr>
 </tbody>
 </table></div>
@@ -1007,8 +980,44 @@
 <span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">exact</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </code></pre></div>
 
+<h2 id="batch-search-performance">Batch Search Performance</h2>
+<p>Use <code>similarity_search_batch()</code> for multi-query workloads:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Batch Size</th>
+<th>Sequential Time</th>
+<th>Batch Time</th>
+<th>Speedup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10</td>
+<td>2.0 ms</td>
+<td>0.5 ms</td>
+<td>4x</td>
+</tr>
+<tr>
+<td>100</td>
+<td>20.0 ms</td>
+<td>3.0 ms</td>
+<td>7x</td>
+</tr>
+<tr>
+<td>1000</td>
+<td>200.0 ms</td>
+<td>25.0 ms</td>
+<td>8x</td>
+</tr>
+</tbody>
+</table></div>
+<div class="codehilite"><pre><span></span><code><span class="n">queries</span> <span class="o">=</span> <span class="p">[</span><span class="n">query1</span><span class="p">,</span> <span class="n">query2</span><span class="p">,</span> <span class="n">query3</span><span class="p">]</span>  <span class="c1"># List of embedding vectors</span>
+<span class="n">batch_results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search_batch</span><span class="p">(</span><span class="n">queries</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</code></pre></div>
+
 <h2 id="memory-mapping-behavior">Memory-Mapping Behavior</h2>
-<p>Large indexes automatically use memory-mapped mode:</p>
+<p>Large indexes automatically use memory-mapped mode for instant startup:</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -1033,7 +1042,6 @@
 </tr>
 </tbody>
 </table></div>
-<p>Memory-mapped indexes load instantly and only read pages as needed.</p>
 <h2 id="quantization-guide">Quantization Guide</h2>
 <div class="table-wrapper"><table>
 <thead>
@@ -1059,7 +1067,7 @@
 <td>FLOAT16</td>
 <td>16</td>
 <td>0.5x</td>
-<td>1.5x</td>
+<td>1x</td>
 <td>~99%</td>
 <td>Balanced (recommended)</td>
 </tr>
@@ -1067,7 +1075,7 @@
 <td>INT8</td>
 <td>8</td>
 <td>0.25x</td>
-<td>2x</td>
+<td>1.2x</td>
 <td>~97%</td>
 <td>Memory-constrained</td>
 </tr>
@@ -1075,9 +1083,9 @@
 <td>BIT</td>
 <td>1</td>
 <td>0.03x</td>
-<td>3x</td>
+<td>2.5x</td>
 <td>~85%</td>
-<td>Massive scale, initial filtering</td>
+<td>Massive scale, fast filtering</td>
 </tr>
 </tbody>
 </table></div>
@@ -1152,8 +1160,11 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <span class="c1"># Run the backend benchmark</span>
 python<span class="w"> </span>examples/backend_benchmark.py
 
-<span class="c1"># Run quantization benchmark</span>
+<span class="c1"># Run quantization benchmark  </span>
 python<span class="w"> </span>examples/quant_benchmark.py
+
+<span class="c1"># Run full performance benchmark</span>
+python<span class="w"> </span>examples/embeddings/perf_benchmark.py
 </code></pre></div>
   </div>
 </article>
@@ -1330,31 +1341,27 @@ python<span class="w"> </span>examples/quant_benchmark.py
         
         
         
-        <a href="#v20-hnsw-benchmarks-usearch-v212"
+        <a href="#test-environment"
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
             data-active="false" data-depth="2">
-            v2.0 HNSW Benchmarks (usearch v2.12+)
+            Test Environment
         </a>
         
+
         
-        <a href="#100000-vectors-384-dimensions"
+        <a href="#search-speed-k10"
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
-            data-active="false" data-depth="3">
-            100,000 Vectors (384 dimensions)
+            data-active="false" data-depth="2">
+            Search Speed (k=10)
         </a>
         
-        <a href="#1000000-vectors-384-dimensions"
+
+        
+        <a href="#storage-efficiency-quantization"
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
-            data-active="false" data-depth="3">
-            1,000,000 Vectors (384 dimensions)
+            data-active="false" data-depth="2">
+            Storage Efficiency (Quantization)
         </a>
-        
-        <a href="#batch-search-performance"
-            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
-            data-active="false" data-depth="3">
-            Batch Search Performance
-        </a>
-        
         
 
         
@@ -1362,6 +1369,14 @@ python<span class="w"> </span>examples/quant_benchmark.py
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
             data-active="false" data-depth="2">
             Adaptive Search Behavior
+        </a>
+        
+
+        
+        <a href="#batch-search-performance"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2">
+            Batch Search Performance
         </a>
         
 
