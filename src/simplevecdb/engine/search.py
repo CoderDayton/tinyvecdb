@@ -53,6 +53,7 @@ class SearchEngine:
         filter: dict[str, Any] | None = None,
         *,
         exact: bool | None = None,
+        threads: int = 0,
     ) -> list[tuple[Document, float]]:
         """
         Perform vector similarity search.
@@ -63,6 +64,7 @@ class SearchEngine:
             filter: Optional metadata filter
             exact: Force search mode. None=adaptive (brute-force for <10k vectors),
                    True=always brute-force (perfect recall), False=always HNSW.
+            threads: Number of threads for parallel search (0=auto)
 
         Returns:
             List of (Document, distance) tuples sorted by distance (lower = more similar)
@@ -75,7 +77,9 @@ class SearchEngine:
         # Over-fetch for filtering
         fetch_k = k * constants.USEARCH_FILTER_OVERFETCH_MULTIPLIER if filter else k
 
-        keys, distances = self._index.search(query_vec, fetch_k, exact=exact)
+        keys, distances = self._index.search(
+            query_vec, fetch_k, exact=exact, threads=threads
+        )
 
         if len(keys) == 0:
             return []

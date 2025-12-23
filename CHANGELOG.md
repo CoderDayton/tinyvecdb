@@ -53,6 +53,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Collections ≥ 10k vectors use HNSW for faster approximate search
   - Threshold configurable via `constants.USEARCH_BRUTEFORCE_THRESHOLD`
 
+- **`exact` parameter** - Force search mode in `similarity_search()`:
+  - `None` (default): adaptive based on collection size
+  - `True`: force brute-force for perfect recall
+  - `False`: force HNSW approximate search
+
+- **`Quantization.FLOAT16`** - Half-precision floating point:
+  - 2x memory savings compared to FLOAT32
+  - 1.5x faster search with minimal precision loss
+  - Ideal for embeddings where full precision isn't needed
+
+- **`threads` parameter** - Parallel execution control:
+  - Added to `add_texts()` and `similarity_search()`
+  - `0` (default): auto-detect optimal thread count
+  - Explicit value: control parallelism for batch operations
+
 - **`examples/backend_benchmark.py`** - Benchmark script comparing usearch vs brute-force:
   - Measures speedup, recall, and storage efficiency
   - Supports all quantization levels

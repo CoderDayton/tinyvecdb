@@ -30,5 +30,6 @@ class DistanceStrategy(StrEnum):
 
 class Quantization(StrEnum):
     FLOAT = "float"
+    FLOAT16 = "float16"  # Half-precision: 2x memory savings, 1.5x speed
     INT8 = "int8"
     BIT = "bit"

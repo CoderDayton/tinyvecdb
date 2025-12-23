@@ -47,6 +47,7 @@ def _get_scalar_kind(quantization: Quantization) -> Any:
 
     mapping = {
         Quantization.FLOAT: ScalarKind.F32,
+        Quantization.FLOAT16: ScalarKind.F16,
         Quantization.INT8: ScalarKind.I8,
         Quantization.BIT: ScalarKind.B1,
     }
@@ -184,6 +185,7 @@ class UsearchIndex:
         self,
         keys: NDArray[np.uint64],
         vectors: NDArray[np.float32],
+        threads: int = 0,
     ) -> None:
         """
         Add vectors to the index.
@@ -193,6 +195,7 @@ class UsearchIndex:
         Args:
             keys: Array of uint64 keys (typically SQLite rowids)
             vectors: Array of float32 vectors, shape (n, ndim)
+            threads: Number of threads for parallel insertion (0=auto)
 
         Raises:
             ValueError: If vector dimension doesn't match index dimension
@@ -228,10 +231,10 @@ class UsearchIndex:
                 if int(key) in self._index:
                     self._index.remove(int(key))
 
-            self._index.add(keys, vectors)
+            self._index.add(keys, vectors, threads=threads)
             self._dirty = True
 
-            _logger.debug("Added %d vectors to index", len(keys))
+            _logger.debug("Added %d vectors to index (threads=%d)", len(keys), threads)
 
     def search(
         self,
@@ -239,6 +242,7 @@ class UsearchIndex:
         k: int,
         expansion_search: int | None = None,
         exact: bool | None = None,
+        threads: int = 0,
     ) -> tuple[NDArray[np.uint64], NDArray[np.float32]]:
         """
         Search for k nearest neighbors.
@@ -252,6 +256,7 @@ class UsearchIndex:
             expansion_search: Override default ef parameter for this search
             exact: Force exact (brute-force) search. If None, auto-selects
                    based on index size (brute-force if < 10k vectors).
+            threads: Number of threads for parallel search (0=auto)
 
         Returns:
             Tuple of (keys, distances) arrays. For cosine, distance is in [0, 2].
@@ -296,7 +301,7 @@ class UsearchIndex:
             )
 
         # usearch search is thread-safe for reads
-        matches = self._index.search(query, k, exact=use_exact)
+        matches = self._index.search(query, k, exact=use_exact, threads=threads)
 
         # Handle single query vs batch
         keys = np.asarray(matches.keys, dtype=np.uint64)

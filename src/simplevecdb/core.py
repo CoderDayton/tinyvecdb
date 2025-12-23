@@ -286,6 +286,8 @@ class VectorCollection:
         metadatas: Sequence[dict] | None = None,
         embeddings: Sequence[Sequence[float]] | None = None,
         ids: Sequence[int | None] | None = None,
+        *,
+        threads: int = 0,
     ) -> list[int]:
         """
         Add texts with optional embeddings and metadata to the collection.
@@ -300,6 +302,7 @@ class VectorCollection:
             embeddings: Optional pre-computed embeddings (one per text).
                 If None, attempts to use local embedding model.
             ids: Optional document IDs for upsert behavior.
+            threads: Number of threads for parallel insertion (0=auto).
 
         Returns:
             List of inserted/updated document IDs.
@@ -349,7 +352,7 @@ class VectorCollection:
             emb_np = np.array(batch_embeds, dtype=np.float32)
 
             # Add to usearch index
-            self._index.add(np.array(doc_ids, dtype=np.uint64), emb_np)
+            self._index.add(np.array(doc_ids, dtype=np.uint64), emb_np, threads=threads)
 
             all_ids.extend(doc_ids)
 
@@ -362,6 +365,7 @@ class VectorCollection:
         filter: dict[str, Any] | None = None,
         *,
         exact: bool | None = None,
+        threads: int = 0,
     ) -> list[tuple[Document, float]]:
         """
         Search for most similar vectors using HNSW approximate nearest neighbor.
@@ -375,11 +379,14 @@ class VectorCollection:
             filter: Optional metadata filter.
             exact: Force search mode. None=adaptive (brute-force for <10k vectors),
                    True=always brute-force (perfect recall), False=always HNSW.
+            threads: Number of threads for parallel search (0=auto).
 
         Returns:
             List of (Document, distance) tuples, sorted by ascending distance.
         """
-        return self._search.similarity_search(query, k, filter, exact=exact)
+        return self._search.similarity_search(
+            query, k, filter, exact=exact, threads=threads
+        )
 
     def keyword_search(
         self, query: str, k: int = 5, filter: dict[str, Any] | None = None

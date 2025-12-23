@@ -178,8 +178,8 @@ Organize vectors by domain within a single database file:
 from simplevecdb import VectorDB, Quantization
 
 db = VectorDB("app.db")
-users = db.collection("users", quantization=Quantization.INT8)
-products = db.collection("products", quantization=Quantization.BIT)
+users = db.collection("users", quantization=Quantization.FLOAT16)  # 2x memory savings
+products = db.collection("products", quantization=Quantization.BIT)  # 32x compression
 
 # Isolated namespaces
 users.add_texts(["Alice likes hiking"], embeddings=[[0.1]*384])
@@ -197,6 +197,9 @@ results = collection.similarity_search(query_vector, k=10, exact=True)
 
 # Force HNSW approximate search (faster, may miss some results)
 results = collection.similarity_search(query_vector, k=10, exact=False)
+
+# Parallel search with explicit thread count
+results = collection.similarity_search(query_vector, k=10, threads=8)
 
 # Keyword search (BM25)
 results = collection.keyword_search("exact phrase", k=10)
@@ -217,20 +220,21 @@ results = collection.similarity_search(
 
 ## Feature Matrix
 
-| Feature                   | Status | Description                                                |
-| :------------------------ | :----- | :--------------------------------------------------------- |
-| **Single-File Storage**   | ✅     | SQLite `.db` file or in-memory mode                        |
-| **Multi-Collection**      | ✅     | Isolated namespaces per database                           |
-| **HNSW Indexing**         | ✅     | usearch HNSW for 10-100x faster search                     |
-| **Adaptive Search**       | ✅     | Auto brute-force for <10k vectors, HNSW for larger         |
-| **Vector Search**         | ✅     | Cosine, Euclidean metrics (L1 removed in v2.0)             |
-| **Hybrid Search**         | ✅     | BM25 + vector fusion (Reciprocal Rank Fusion)              |
-| **Quantization**          | ✅     | FLOAT32, INT8, BIT (1-bit) for 4-32x compression           |
-| **Metadata Filtering**    | ✅     | SQL `WHERE` clause support                                 |
-| **Framework Integration** | ✅     | LangChain \& LlamaIndex adapters                           |
-| **Hardware Acceleration** | ✅     | Auto-detects CUDA/MPS/CPU + SIMD via usearch               |
-| **Local Embeddings**      | ✅     | HuggingFace models via `[server]` extras                   |
-| **Built-in Encryption**   | 🔜     | SQLCipher integration for at-rest encryption               |
+| Feature                   | Status | Description                                                  |
+| :------------------------ | :----- | :----------------------------------------------------------- |
+| **Single-File Storage**   | ✅     | SQLite `.db` file or in-memory mode                          |
+| **Multi-Collection**      | ✅     | Isolated namespaces per database                             |
+| **HNSW Indexing**         | ✅     | usearch HNSW for 10-100x faster search                       |
+| **Adaptive Search**       | ✅     | Auto brute-force for <10k vectors, HNSW for larger           |
+| **Vector Search**         | ✅     | Cosine, Euclidean metrics (L1 removed in v2.0)               |
+| **Hybrid Search**         | ✅     | BM25 + vector fusion (Reciprocal Rank Fusion)                |
+| **Quantization**          | ✅     | FLOAT32, FLOAT16, INT8, BIT for 2-32x compression            |
+| **Parallel Operations**   | ✅     | `threads` parameter for add/search                           |
+| **Metadata Filtering**    | ✅     | SQL `WHERE` clause support                                   |
+| **Framework Integration** | ✅     | LangChain \& LlamaIndex adapters                             |
+| **Hardware Acceleration** | ✅     | Auto-detects CUDA/MPS/CPU + SIMD via usearch                 |
+| **Local Embeddings**      | ✅     | HuggingFace models via `[server]` extras                     |
+| **Built-in Encryption**   | 🔜     | SQLCipher integration for at-rest encryption                 |
 
 ## Performance Benchmarks
 
@@ -251,16 +255,18 @@ results = collection.similarity_search(
 
 ### Storage Efficiency (Quantization)
 
-| Quantization | Storage Size | Query Latency | Compression |
-| :----------- | :----------- | :------------ | :---------- |
-| **FLOAT32**  | 15.50 MB     | 0.12 ms       | 1x          |
-| **INT8**     | 4.23 MB      | 0.10 ms       | 3.7x        |
-| **BIT**      | 0.95 MB      | 0.08 ms       | 16.3x       |
+| Quantization  | Storage Size | Query Latency | Compression |
+| :------------ | :----------- | :------------ | :---------- |
+| **FLOAT32**   | 15.50 MB     | 0.12 ms       | 1x          |
+| **FLOAT16**   | 7.75 MB      | 0.10 ms       | 2x          |
+| **INT8**      | 4.23 MB      | 0.10 ms       | 3.7x        |
+| **BIT**       | 0.95 MB      | 0.08 ms       | 16.3x       |
 
 **Key Takeaways:**
 
 - HNSW delivers 10-50x speedup for collections >10k vectors
 - Adaptive search ensures perfect recall for small collections
+- FLOAT16: Best balance of speed, memory, and precision for embeddings
 - BIT quantization: 16x smaller with fastest queries (Hamming distance)
 
 ## Documentation
