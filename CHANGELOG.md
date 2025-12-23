@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `add_texts()` now delegates to `_insert_batch()` which has retry logic
   - `delete_by_ids()` now has retry logic for lock contention
   - `build_filter_clause()` validates filters before processing
+- **`delete_by_ids()` no longer auto-vacuums** - Call `VectorDB.vacuum()` separately to reclaim disk space after large deletions. This improves performance for batch deletions.
+- **RateLimiter** now includes TTL-based cleanup to prevent memory exhaustion on long-running servers with many unique clients (default: 1 hour TTL, 10k max buckets).
+- **AsyncVectorDB.close()** now guarantees database connection is closed even if executor shutdown fails.
 
 ### Testing
 

@@ -24,10 +24,13 @@ jobs:
           uv venv
           uv pip install safety pip-audit
 
-      - name: Scan dependencies
+      - name: Scan dependencies with pip-audit
+        run: |
+          uv run pip-audit --requirement pyproject.toml --strict
+
+      - name: Scan dependencies with safety (informational)
         run: |
           uv run safety check --json || true
-          uv run pip-audit --requirement pyproject.toml || true
 
   code-scan:
     runs-on: ubuntu-latest

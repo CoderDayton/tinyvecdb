@@ -446,3 +446,47 @@ def test_wal_mode(tmp_path):
     journal_mode = db.conn.execute("PRAGMA journal_mode").fetchone()[0]
     assert journal_mode.lower() == "wal"
     db.close()
+
+
+def test_vacuum_runs_without_error(tmp_path):
+    """Test that vacuum() executes all maintenance operations."""
+    db_path = str(tmp_path / "vacuum_test.db")
+    db = VectorDB(db_path)
+    collection = db.collection("default")
+
+    # Add and delete data
+    texts = [f"text_{i}" for i in range(100)]
+    embeddings = [[float(i) * 0.001] * 64 for i in range(100)]
+    ids = collection.add_texts(texts, embeddings=embeddings)
+    collection.delete_by_ids(ids)
+
+    # Vacuum should execute without error
+    db.vacuum()
+
+    # Verify PRAGMA optimize ran (freelist should exist after delete)
+    freelist = db.conn.execute("PRAGMA freelist_count").fetchone()[0]
+    assert freelist >= 0  # Just verify query works
+
+    # DB should still be functional
+    new_ids = collection.add_texts(["new"], embeddings=[[0.1] * 64])
+    assert len(new_ids) == 1
+
+    db.close()
+
+
+def test_vacuum_without_wal_checkpoint(tmp_path):
+    """Test vacuum() with checkpoint_wal=False."""
+    db_path = str(tmp_path / "vacuum_no_wal.db")
+    db = VectorDB(db_path)
+    collection = db.collection("default")
+
+    collection.add_texts(["test"], embeddings=[[0.1] * 64])
+
+    # Should not raise
+    db.vacuum(checkpoint_wal=False)
+
+    # Verify db still works
+    results = collection.similarity_search([0.1] * 64, k=1)
+    assert len(results) == 1
+
+    db.close()

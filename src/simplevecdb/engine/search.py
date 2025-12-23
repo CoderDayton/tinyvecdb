@@ -152,6 +152,7 @@ class SearchEngine:
         query: str | Sequence[float],
         k: int = 5,
         fetch_k: int = 20,
+        lambda_mult: float = 0.5,
         filter: dict[str, Any] | None = None,
         filter_builder: Callable | None = None,
     ) -> list[Document]:
@@ -162,6 +163,8 @@ class SearchEngine:
             query: Query vector or text (auto-embedded if string)
             k: Number of diverse results to return
             fetch_k: Number of candidates to consider (should be >= k)
+            lambda_mult: Diversity trade-off (0=max diversity, 1=max relevance).
+                Default 0.5 balances both equally.
             filter: Optional metadata filter
             filter_builder: Function to build SQL WHERE clause
 
@@ -194,7 +197,7 @@ class SearchEngine:
                     )
                     for selected_doc in selected
                 )
-                mmr_score = 0.5 * relevance - 0.5 * diversity
+                mmr_score = lambda_mult * relevance - (1 - lambda_mult) * diversity
                 mmr_scores.append((mmr_score, candidate))
 
             mmr_scores.sort(key=lambda x: x[0], reverse=True)
@@ -405,14 +408,26 @@ class SearchEngine:
     def _hydrate_documents(
         self, candidates: Sequence[tuple[int, float]]
     ) -> list[tuple[Document, float]]:
+        """Batch hydrate documents from candidates (single query instead of N+1)."""
+        if not candidates:
+            return []
+
+        # Single batched query instead of N individual queries
+        ids = [cid for cid, _ in candidates]
+        placeholders = ",".join("?" for _ in ids)
+        rows = self.conn.execute(
+            f"SELECT id, text, metadata FROM {self._table_name} WHERE id IN ({placeholders})",
+            tuple(ids),
+        ).fetchall()
+
+        # Build lookup map for O(1) access
+        row_map = {r[0]: (r[1], r[2]) for r in rows}
+
+        # Preserve original order from candidates
         results: list[tuple[Document, float]] = []
         for cid, score in candidates:
-            row = self.conn.execute(
-                f"SELECT text, metadata FROM {self._table_name} WHERE id = ?", (cid,)
-            ).fetchone()
-            if not row:
-                continue
-            text, meta_json = row
-            meta = json.loads(meta_json) if meta_json else {}
-            results.append((Document(page_content=text, metadata=meta), score))
+            if cid in row_map:
+                text, meta_json = row_map[cid]
+                meta = json.loads(meta_json) if meta_json else {}
+                results.append((Document(page_content=text, metadata=meta), score))
         return results

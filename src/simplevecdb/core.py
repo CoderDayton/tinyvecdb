@@ -466,6 +466,7 @@ class VectorCollection:
         query: str | Sequence[float],
         k: int = 5,
         fetch_k: int = 20,
+        lambda_mult: float = 0.5,
         filter: dict[str, Any] | None = None,
     ) -> list[Document]:
         """
@@ -478,7 +479,7 @@ class VectorCollection:
 
         Algorithm:
         1. Fetch `fetch_k` most relevant candidates
-        2. Iteratively select documents maximizing: 0.5*relevance - 0.5*max_similarity_to_selected
+        2. Iteratively select documents maximizing: lambda_mult*relevance - (1-lambda_mult)*max_similarity_to_selected
         3. Continue until `k` documents selected
 
         Args:
@@ -487,6 +488,10 @@ class VectorCollection:
             fetch_k: Number of relevant candidates to consider (should be >= k).
                 Higher values increase diversity at cost of latency.
                 Typical: 2-5x larger than k.
+            lambda_mult: Diversity trade-off parameter (0-1).
+                0 = maximum diversity (ignore relevance)
+                1 = maximum relevance (ignore diversity)
+                0.5 = balanced (default)
             filter: Optional metadata filter.
 
         Returns:
@@ -494,7 +499,12 @@ class VectorCollection:
             First result is most relevant, subsequent results balance relevance + diversity.
         """
         return self._search.max_marginal_relevance_search(
-            query, k, fetch_k, filter, filter_builder=self._build_filter_clause
+            query,
+            k,
+            fetch_k,
+            lambda_mult,
+            filter,
+            filter_builder=self._build_filter_clause,
         )
 
     def _brute_force_search(
@@ -511,7 +521,8 @@ class VectorCollection:
         """
         Delete documents by their IDs.
 
-        Removes documents from all tables and runs VACUUM to reclaim space.
+        Removes documents from metadata and vector tables. Does NOT auto-vacuum;
+        call `VectorDB.vacuum()` separately to reclaim disk space after large deletions.
 
         Args:
             ids: Document IDs to delete
@@ -571,8 +582,9 @@ class VectorDB:
         self.distance_strategy = distance_strategy
         self.quantization = quantization
 
-        self.conn = sqlite3.connect(self.path, check_same_thread=False)
+        self.conn = sqlite3.connect(self.path, check_same_thread=False, timeout=30.0)
         self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")  # Safe with WAL, faster writes
         self.conn.enable_load_extension(True)
         try:
             sqlite_vec.load(self.conn)
@@ -658,6 +670,33 @@ class VectorDB:
     # ------------------------------------------------------------------ #
     # Convenience
     # ------------------------------------------------------------------ #
+    def vacuum(self, checkpoint_wal: bool = True) -> None:
+        """
+        Reclaim disk space by rebuilding the database file.
+
+        VACUUM rewrites the entire database file to remove fragmentation
+        and reclaim space from deleted rows. This is an expensive operation
+        that temporarily doubles disk usage and locks the database.
+
+        Call this periodically after large deletions, not after every delete.
+        For incremental cleanup, consider using `PRAGMA incremental_vacuum`.
+
+        Args:
+            checkpoint_wal: If True (default), also truncate the WAL file
+                to minimize total disk footprint.
+
+        Example:
+            >>> db = VectorDB("vectors.db")
+            >>> collection = db.collection("docs")
+            >>> collection.delete_by_ids([1, 2, 3])  # No auto-vacuum
+            >>> # ... more operations ...
+            >>> db.vacuum()  # Reclaim space when convenient
+        """
+        if checkpoint_wal:
+            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        self.conn.execute("VACUUM")
+        self.conn.execute("PRAGMA optimize")  # Update query planner statistics
+
     def close(self) -> None:
         """
         Close the database connection.
