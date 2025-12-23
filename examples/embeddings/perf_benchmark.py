@@ -174,7 +174,7 @@ def run_benchmarks():
 
     print("\n" + "=" * 90)
     print(f"Platform: {platform.system()} {platform.machine()} ({platform.release()})")
-    print("sqlite-vec version: (check with `pip show sqlite-vec`)")
+    print("Backend: usearch HNSW")
     print("=" * 90 + "\n")
 
 

@@ -242,36 +242,19 @@ results = collection.similarity_search(
 
 ## Performance Benchmarks
 
-**Test Environment:** Intel i9-13900K, 384-dim vectors, usearch v2.12
-**Comparison:** usearch HNSW vs NumPy brute-force baseline
+**10,000 vectors, 384 dimensions, k=10 search** — [Full benchmarks →](https://coderdayton.github.io/SimpleVecDB/benchmarks)
 
-### Search Speed (k=10)
+| Quantization | Storage  | Query Time | Compression |
+| :----------- | :------- | :--------- | :---------- |
+| FLOAT32      | 36.0 MB  | 0.20 ms    | 1x          |
+| FLOAT16      | 28.7 MB  | 0.20 ms    | 2x          |
+| INT8         | 25.0 MB  | 0.16 ms    | 4x          |
+| BIT          | 21.8 MB  | 0.08 ms    | 32x         |
 
-| Collection Size | usearch (ms) | Brute-force (ms) | Speedup | Recall@10 |
-| :-------------- | :----------- | :--------------- | :------ | :-------- |
-| **1,000**       | 0.05         | 0.08             | 1.6x    | 1.00      |
-| **5,000**       | 0.06         | 0.35             | 5.8x    | 1.00*     |
-| **10,000**      | 0.08         | 0.70             | 8.8x    | 0.95      |
-| **50,000**      | 0.12         | 3.50             | 29x     | 0.92      |
-| **100,000**     | 0.15         | 7.00             | 47x     | 0.90      |
-
-*Collections <10k use adaptive brute-force for perfect recall.
-
-### Storage Efficiency (Quantization)
-
-| Quantization  | Storage Size | Query Latency | Compression |
-| :------------ | :----------- | :------------ | :---------- |
-| **FLOAT32**   | 15.50 MB     | 0.12 ms       | 1x          |
-| **FLOAT16**   | 7.75 MB      | 0.10 ms       | 2x          |
-| **INT8**      | 4.23 MB      | 0.10 ms       | 3.7x        |
-| **BIT**       | 0.95 MB      | 0.08 ms       | 16.3x       |
-
-**Key Takeaways:**
-
-- HNSW delivers 10-50x speedup for collections >10k vectors
-- Adaptive search ensures perfect recall for small collections
-- FLOAT16: Best balance of speed, memory, and precision for embeddings
-- BIT quantization: 16x smaller with fastest queries (Hamming distance)
+**Key highlights:**
+- **3-34x faster** than brute-force for collections >10k vectors
+- **Adaptive search**: perfect recall for small collections, HNSW for large
+- **FLOAT16 recommended**: best balance of speed, memory, and precision
 
 ## Documentation
 
