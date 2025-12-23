@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Sequence
+from threading import Lock
 from typing import Any
 
 from .core import VectorDB, VectorCollection
@@ -141,6 +142,7 @@ class AsyncVectorCollection:
         query: str | Sequence[float],
         k: int = 5,
         fetch_k: int = 20,
+        lambda_mult: float = 0.5,
         filter: dict[str, Any] | None = None,
     ) -> list[Document]:
         """
@@ -152,7 +154,7 @@ class AsyncVectorCollection:
         return await loop.run_in_executor(
             self._executor,
             lambda: self._collection.max_marginal_relevance_search(
-                query, k, fetch_k, filter
+                query, k, fetch_k, lambda_mult, filter
             ),
         )
 
@@ -224,6 +226,7 @@ class AsyncVectorDB:
         )
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._collections: dict[tuple, AsyncVectorCollection] = {}
+        self._collections_lock = Lock()  # Thread-safe collection caching
 
     def collection(
         self,
@@ -243,21 +246,40 @@ class AsyncVectorDB:
             AsyncVectorCollection instance.
         """
         cache_key = (name, distance_strategy, quantization)
-        if cache_key not in self._collections:
-            sync_collection = self._db.collection(
-                name,
-                distance_strategy=distance_strategy,
-                quantization=quantization,
-            )
-            self._collections[cache_key] = AsyncVectorCollection(
-                sync_collection, self._executor
-            )
-        return self._collections[cache_key]
+        with self._collections_lock:
+            if cache_key not in self._collections:
+                sync_collection = self._db.collection(
+                    name,
+                    distance_strategy=distance_strategy,
+                    quantization=quantization,
+                )
+                self._collections[cache_key] = AsyncVectorCollection(
+                    sync_collection, self._executor
+                )
+            return self._collections[cache_key]
+
+    async def vacuum(self, checkpoint_wal: bool = True) -> None:
+        """
+        Reclaim disk space by rebuilding the database file.
+
+        Async wrapper for VectorDB.vacuum(). See sync version for details.
+
+        Args:
+            checkpoint_wal: If True (default), also truncate the WAL file.
+        """
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            self._executor, lambda: self._db.vacuum(checkpoint_wal)
+        )
 
     async def close(self) -> None:
         """Close the database connection and shutdown executor."""
-        self._executor.shutdown(wait=True)
-        self._db.close()
+        # Run shutdown in executor to avoid blocking event loop
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(None, self._executor.shutdown, True)
+        finally:
+            self._db.close()
 
     async def __aenter__(self) -> "AsyncVectorDB":
         """Async context manager entry."""

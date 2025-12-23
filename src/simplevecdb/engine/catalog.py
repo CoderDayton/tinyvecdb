@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, TYPE_CHECKING, Callable
 from collections.abc import Iterable, Sequence
 
@@ -12,6 +13,18 @@ if TYPE_CHECKING:
     from ..types import Quantization, DistanceStrategy
 
 _logger = logging.getLogger("simplevecdb.engine.catalog")
+
+# Regex for safe table names (defense-in-depth)
+_SAFE_TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_table_name(name: str) -> None:
+    """Validate table name to prevent SQL injection (defense-in-depth)."""
+    if not _SAFE_TABLE_NAME_RE.match(name):
+        raise ValueError(
+            f"Invalid table name '{name}'. Must be alphanumeric + underscores, "
+            "starting with a letter or underscore."
+        )
 
 
 class CatalogManager:
@@ -48,6 +61,11 @@ class CatalogManager:
         dim_getter: Callable[[], int | None],
         dim_setter: Callable[[int], None],
     ):
+        # Defense-in-depth: validate table names even if core.py already validates
+        _validate_table_name(table_name)
+        _validate_table_name(vec_table_name)
+        _validate_table_name(fts_table_name)
+
         self.conn = conn
         self._table_name = table_name
         self._vec_table_name = vec_table_name
@@ -279,16 +297,17 @@ class CatalogManager:
         return batch_real_ids
 
     @retry_on_lock(max_retries=5, base_delay=0.1)
-    def delete_by_ids(self, ids: Iterable[int]) -> None:
+    def delete_by_ids(self, ids: Iterable[int], vacuum: bool = False) -> None:
         """
         Delete documents by their IDs.
 
         Removes documents from metadata, vector index, and FTS tables.
-        Automatically runs VACUUM to reclaim disk space. Retries on
+        Optionally runs VACUUM to reclaim disk space. Retries on
         database lock errors with exponential backoff.
 
         Args:
             ids: Document IDs to delete
+            vacuum: If True, run VACUUM after deletion (expensive for large DBs)
         """
         ids = list(ids)
         if not ids:
@@ -312,7 +331,10 @@ class CatalogManager:
                 params,
             )
             self.delete_fts_rows(ids)
-        self.conn.execute("VACUUM")
+
+        # Only VACUUM on explicit request (expensive operation)
+        if vacuum:
+            self.conn.execute("VACUUM")
 
         _logger.debug(
             "Deleted %d documents successfully",
@@ -399,8 +421,12 @@ class CatalogManager:
                 clauses.append(f"json_extract({metadata_column}, ?) = ?")
                 params.extend([json_path, value])
             elif isinstance(value, str):
-                clauses.append(f"json_extract({metadata_column}, ?) LIKE ?")
-                params.extend([json_path, f"%{value}%"])
+                # Escape LIKE special characters to prevent injection
+                escaped_value = (
+                    value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                )
+                clauses.append(f"json_extract({metadata_column}, ?) LIKE ? ESCAPE '\\'")
+                params.extend([json_path, f"%{escaped_value}%"])
             elif isinstance(value, list):
                 placeholders = ",".join("?" for _ in value)
                 clauses.append(

@@ -85,7 +85,8 @@ def test_embeddings_endpoint_error_handling():
         response = client.post("/v1/embeddings", json={"input": "test"})
 
         assert response.status_code == 500
-        assert "Embedding failed" in response.json()["detail"]
+        # Error message should be generic (no internal details exposed)
+        assert "Embedding operation failed" in response.json()["detail"]
 
 
 def test_embeddings_endpoint_usage_tokens():
