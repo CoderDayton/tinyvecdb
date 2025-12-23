@@ -27,7 +27,7 @@ jobs:
 
       - name: Scan dependencies with pip-audit
         run: |
-          uv run pip-audit --strict
+          uv run pip-audit --strict --skip-editable
 
   code-scan:
     runs-on: ubuntu-latest
