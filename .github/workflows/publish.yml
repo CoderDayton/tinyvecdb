@@ -10,37 +10,82 @@ permissions:
   contents: write
 
 jobs:
+  # Verify version matches before publishing
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Verify __version__ matches tag
+        run: |
+          PACKAGE_VERSION=$(uv run python -c "from simplevecdb import __version__; print(__version__)")
+          TAG_VERSION="${{ steps.version.outputs.VERSION }}"
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "❌ Version mismatch!"
+            echo "   Tag version:     $TAG_VERSION"
+            echo "   Package version: $PACKAGE_VERSION"
+            echo ""
+            echo "Update __version__ in src/simplevecdb/__init__.py to match the tag."
+            exit 1
+          fi
+          echo "✅ Version match: $PACKAGE_VERSION"
+
   release:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Extract changelog
+      - name: Extract changelog for release
         id: changelog
         run: |
-          # Extract only current version section from CHANGELOG.md
-          awk '/^## \[${{ steps.version.outputs.VERSION }}\]/,/^## \[/' CHANGELOG.md | head -n -1 > release_notes.md
-          # If empty, use a default message
+          VERSION="${{ needs.verify.outputs.version }}"
+          # Extract section for this version from CHANGELOG.md
+          # Matches from "## [VERSION]" until the next "## [" or end of file
+          awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              if (index($0, "## [" ver "]") == 1) found=1
+            }
+            found
+          ' CHANGELOG.md > release_notes.md
+
+          # If empty, provide a fallback
           if [ ! -s release_notes.md ]; then
-            echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md#${{ steps.version.outputs.VERSION }})" > release_notes.md
+            echo "## Release v$VERSION" > release_notes.md
+            echo "" >> release_notes.md
+            echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details." >> release_notes.md
           fi
+
+          echo "📋 Release notes:"
+          cat release_notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.md
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(needs.verify.outputs.version, 'rc') || contains(needs.verify.outputs.version, 'beta') || contains(needs.verify.outputs.version, 'alpha') }}
+          generate_release_notes: false
 
   publish:
-    needs: release
+    needs: [verify, release]
     runs-on: ubuntu-latest
+    environment: pypi
     steps:
       - uses: actions/checkout@v4
 
@@ -52,6 +97,25 @@ jobs:
 
       - name: Build package
         run: uv build
+
+      - name: Verify build artifacts
+        run: |
+          echo "📦 Built packages:"
+          ls -la dist/
+          # Verify version in built package
+          uv run python -c "
+          import zipfile
+          import glob
+          whl = glob.glob('dist/*.whl')[0]
+          with zipfile.ZipFile(whl) as z:
+              for name in z.namelist():
+                  if name.endswith('METADATA'):
+                      content = z.read(name).decode()
+                      for line in content.split('\n'):
+                          if line.startswith('Version:'):
+                              print(f'✅ Package version: {line}')
+                              break
+          "
 
       - name: Publish to PyPI
         run: uv publish --token ${{ secrets.PYPI_API_TOKEN }}

@@ -21,7 +21,7 @@ import platform
 import multiprocessing
 import itertools
 
-from .types import Document, DistanceStrategy, Quantization
+from .types import Document, DistanceStrategy, Quantization, MigrationRequiredError
 from .utils import _import_optional
 from .engine.quantization import QuantizationStrategy
 from .engine.search import SearchEngine
@@ -694,6 +694,8 @@ class VectorDB:
         path: str | Path = ":memory:",
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
         quantization: Quantization = Quantization.FLOAT,
+        *,
+        auto_migrate: bool = False,
     ):
         """Initialize the vector database.
 
@@ -701,15 +703,35 @@ class VectorDB:
             path: Database file path or ":memory:" for in-memory database.
             distance_strategy: Default distance metric for similarity search.
             quantization: Default vector compression strategy.
+            auto_migrate: If True, automatically migrate v1.x sqlite-vec data
+                to usearch. If False (default), raise MigrationRequiredError
+                when legacy data is detected. Use check_migration() to preview.
+
+        Raises:
+            MigrationRequiredError: If auto_migrate=False and legacy sqlite-vec
+                data is detected. Contains details about what needs migration.
         """
         self.path = str(path)
         self.distance_strategy = distance_strategy
         self.quantization = quantization
+        self.auto_migrate = auto_migrate
         self._collections: dict[str, VectorCollection] = {}
 
         self.conn = sqlite3.connect(self.path, check_same_thread=False, timeout=30.0)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
+
+        # Check for required migration before allowing collection access
+        if not auto_migrate and self.path != ":memory:":
+            migration_info = VectorDB.check_migration(self.path)
+            if migration_info["needs_migration"]:
+                self.conn.close()
+                raise MigrationRequiredError(
+                    path=self.path,
+                    collections=migration_info["collections"],
+                    total_vectors=migration_info["total_vectors"],
+                    migration_info=migration_info,
+                )
 
     def collection(
         self,
