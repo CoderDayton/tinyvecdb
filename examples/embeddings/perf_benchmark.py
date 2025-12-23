@@ -16,6 +16,20 @@ def format_size_mb(bytes_size: int) -> str:
     return f"{bytes_size / (1024 * 1024):.2f} MB"
 
 
+def get_total_db_size(db_path: Path) -> int:
+    """Get total storage size including SQLite and usearch files."""
+    total = 0
+    # SQLite files
+    for suffix in ["", "-wal", "-shm"]:
+        p = Path(str(db_path) + suffix)
+        if p.exists():
+            total += p.stat().st_size
+    # Usearch index files (.usearch)
+    for usearch_file in db_path.parent.glob(f"{db_path.name}.*.usearch"):
+        total += usearch_file.stat().st_size
+    return total
+
+
 def benchmark_config(
     vectors: int,
     dimensions: int,
@@ -60,9 +74,9 @@ def benchmark_config(
         insert_time = time.perf_counter() - insert_start
         insert_speed = vectors / insert_time if insert_time > 0 else 0
 
-        # Close and get file size
+        # Close and get file size (must close first - usearch saves on close)
         db.close()
-        file_size = db_path.stat().st_size
+        file_size = get_total_db_size(db_path)
 
         # Reopen for queries
         db = VectorDB(str(db_path), quantization=quantization)
@@ -102,13 +116,9 @@ def benchmark_config(
         }
 
     finally:
-        # Cleanup database files
-        if db_path.exists():
-            db_path.unlink()
-        for ext in ["-shm", "-wal"]:
-            wal_path = Path(str(db_path) + ext)
-            if wal_path.exists():
-                wal_path.unlink()
+        # Cleanup database files (SQLite + usearch)
+        for f in db_path.parent.glob(f"{db_path.name}*"):
+            f.unlink()
 
 
 def run_benchmarks():

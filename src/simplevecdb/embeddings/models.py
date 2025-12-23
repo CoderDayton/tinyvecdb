@@ -52,18 +52,16 @@ def load_model(repo_id: str) -> SentenceTransformerType:
         local_files_only=False,  # auto-download first time
     )
 
-    # Quantized + CPU-friendly
+    # Use PyTorch backend by default (most compatible)
+    # ONNX backend has compatibility issues with optimum>=2.0
     model = st_cls(
         model_path,
-        model_kwargs={"dtype": "auto", "file_name": "model.onnx"},
         tokenizer_kwargs={"padding": True, "truncation": True, "max_length": 512},
-        backend="onnx",
+        backend="torch",
     )
-    # Optional: enable memory-efficient attention if flash-attn available (no-op otherwise)
-    # Modern PyTorch (2.0+) uses SDPA by default, so explicit BetterTransformer conversion
-    # is often unnecessary or deprecated in newer transformers versions.
 
     return model
+
 
 def get_embedder(model_id: str | None = None) -> SentenceTransformerType:
     """Return a cached embedder for the requested model (defaults to config value)."""
