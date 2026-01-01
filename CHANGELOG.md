@@ -5,6 +5,32 @@ All notable changes to SimpleVecDB will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-01
+
+### Added
+
+- **SQLCipher Encryption Support** - Full at-rest encryption for sensitive data:
+  - `VectorDB(path, encryption_key="...")` enables AES-256 page-level database encryption
+  - Uses SQLCipher for transparent SQLite encryption (PRAGMA key)
+  - Usearch index files encrypted with AES-256-GCM (`.usearch.enc`)
+  - Zero performance overhead during search (decrypt on load, encrypt on save only)
+  - Key derivation: PBKDF2-SHA256 with 480,000 iterations for passphrases
+  - Install with `pip install simplevecdb[encryption]`
+
+- **New encryption module** (`simplevecdb.encryption`):
+  - `create_encrypted_connection()` - SQLCipher connection factory
+  - `is_database_encrypted()` - Check if a database file is encrypted
+  - `encrypt_index_file()` / `decrypt_index_file()` - Index file encryption
+  - `EncryptionError` / `EncryptionUnavailableError` - New exception types
+
+### Changed
+
+- `check_migration()` now gracefully handles encrypted databases (returns `needs_migration=False`)
+
+### Dependencies
+
+- New optional dependency group `[encryption]`: `sqlcipher3-binary>=0.5.0`, `cryptography>=41.0`
+
 ## [2.0.0] - 2025-12-23
 
 ### Breaking Changes

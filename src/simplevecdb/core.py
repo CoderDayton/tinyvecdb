@@ -28,6 +28,13 @@ from .engine.search import SearchEngine
 from .engine.catalog import CatalogManager
 from .engine.usearch_index import UsearchIndex
 from . import constants
+from .encryption import (
+    create_encrypted_connection,
+    encrypt_index_file,
+    decrypt_index_file,
+    get_encrypted_index_path,
+    EncryptionError,
+)
 
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
@@ -175,6 +182,7 @@ class VectorCollection:
         name: str,
         distance_strategy: DistanceStrategy,
         quantization: Quantization,
+        encryption_key: str | bytes | None = None,
     ):
         self.conn = conn
         self._db_path = db_path
@@ -182,6 +190,7 @@ class VectorCollection:
         self.distance_strategy = distance_strategy
         self.quantization = quantization
         self._quantizer = QuantizationStrategy(quantization)
+        self._encryption_key = encryption_key
 
         # Sanitize name to prevent issues
         if not re.match(r"^[a-zA-Z0-9_]+$", name):
@@ -213,9 +222,12 @@ class VectorCollection:
         )
         self._catalog.create_tables()
 
+        # Handle encrypted index loading
+        actual_index_path = self._resolve_index_path()
+
         # Create usearch index
         self._index = UsearchIndex(
-            index_path=self._index_path
+            index_path=actual_index_path
             or os.path.join(
                 tempfile.gettempdir(), f"simplevecdb_{uuid.uuid4().hex}.usearch"
             ),
@@ -233,6 +245,33 @@ class VectorCollection:
 
         # Check for and perform migration from sqlite-vec
         self._migrate_from_sqlite_vec_if_needed()
+
+    def _resolve_index_path(self) -> str | None:
+        """
+        Resolve the actual index path, handling encryption.
+
+        If encryption is enabled and an encrypted index exists, decrypt it first.
+        Returns the path to use for the usearch index.
+        """
+        if self._index_path is None:
+            return None
+
+        index_path = Path(self._index_path)
+
+        # Check for encrypted index
+        encrypted_path = get_encrypted_index_path(index_path)
+
+        if encrypted_path is not None:
+            if self._encryption_key is None:
+                raise EncryptionError(
+                    f"Encrypted index found at {encrypted_path} but no encryption_key provided. "
+                    "Pass encryption_key to VectorDB to decrypt."
+                )
+            # Decrypt to the expected path
+            decrypt_index_file(encrypted_path, self._encryption_key)
+            _logger.info("Decrypted index file: %s", encrypted_path)
+
+        return self._index_path
 
     def _migrate_from_sqlite_vec_if_needed(self) -> None:
         """Auto-migrate from sqlite-vec to usearch on first connection."""
@@ -569,8 +608,18 @@ class VectorCollection:
         return len(unique_ids)
 
     def save(self) -> None:
-        """Save the usearch index to disk."""
+        """
+        Save the usearch index to disk.
+
+        If encryption is enabled, the index is encrypted after saving.
+        """
         self._index.save()
+
+        # Encrypt index if encryption is enabled
+        if self._encryption_key is not None and self._index_path is not None:
+            index_path = Path(self._index_path)
+            if index_path.exists():
+                encrypt_index_file(index_path, self._encryption_key)
 
     def rebuild_index(
         self,
@@ -687,6 +736,11 @@ class VectorDB:
     Storage layout:
     - {path} - SQLite database (metadata, text, FTS)
     - {path}.{collection}.usearch - usearch HNSW index per collection
+
+    Encryption (optional):
+    - SQLite encrypted via SQLCipher (transparent page-level AES-256)
+    - Index files encrypted via AES-256-GCM (at-rest only, zero runtime overhead)
+    - Install with: pip install simplevecdb[encryption]
     """
 
     def __init__(
@@ -695,6 +749,7 @@ class VectorDB:
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
         quantization: Quantization = Quantization.FLOAT,
         *,
+        encryption_key: str | bytes | None = None,
         auto_migrate: bool = False,
     ):
         """Initialize the vector database.
@@ -703,6 +758,9 @@ class VectorDB:
             path: Database file path or ":memory:" for in-memory database.
             distance_strategy: Default distance metric for similarity search.
             quantization: Default vector compression strategy.
+            encryption_key: Optional passphrase or 32-byte key for at-rest encryption.
+                Requires simplevecdb[encryption] extras. Encrypts both SQLite
+                (via SQLCipher) and usearch index files (via AES-256-GCM).
             auto_migrate: If True, automatically migrate v1.x sqlite-vec data
                 to usearch. If False (default), raise MigrationRequiredError
                 when legacy data is detected. Use check_migration() to preview.
@@ -710,16 +768,40 @@ class VectorDB:
         Raises:
             MigrationRequiredError: If auto_migrate=False and legacy sqlite-vec
                 data is detected. Contains details about what needs migration.
+            EncryptionUnavailableError: If encryption_key provided but
+                simplevecdb[encryption] not installed.
+            EncryptionError: If encrypted database cannot be opened (wrong key).
+            ValueError: If encryption_key used with ":memory:" database.
         """
         self.path = str(path)
         self.distance_strategy = distance_strategy
         self.quantization = quantization
         self.auto_migrate = auto_migrate
+        self._encryption_key = encryption_key
         self._collections: dict[str, VectorCollection] = {}
 
-        self.conn = sqlite3.connect(self.path, check_same_thread=False, timeout=30.0)
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA synchronous=NORMAL")
+        # Create connection (encrypted or plain)
+        if encryption_key is not None:
+            if self.path == ":memory:":
+                raise ValueError(
+                    "In-memory databases cannot be encrypted. "
+                    "Use a file path for encrypted databases."
+                )
+            self.conn = create_encrypted_connection(
+                self.path,
+                encryption_key,
+                check_same_thread=False,
+                timeout=30.0,
+            )
+            self._encrypted = True
+            _logger.info("Opened encrypted database: %s", self.path)
+        else:
+            self.conn = sqlite3.connect(
+                self.path, check_same_thread=False, timeout=30.0
+            )
+            self.conn.execute("PRAGMA journal_mode=WAL")
+            self.conn.execute("PRAGMA synchronous=NORMAL")
+            self._encrypted = False
 
         # Check for required migration before allowing collection access
         if not auto_migrate and self.path != ":memory:":
@@ -764,6 +846,7 @@ class VectorDB:
                 name=name,
                 distance_strategy=distance_strategy or self.distance_strategy,
                 quantization=quantization or self.quantization,
+                encryption_key=self._encryption_key,
             )
         return self._collections[cache_key]
 
@@ -824,12 +907,35 @@ class VectorDB:
                 "rollback_notes": "",
             }
 
-        conn = sqlite3.connect(path, check_same_thread=False)
+        try:
+            conn = sqlite3.connect(path, check_same_thread=False)
+        except sqlite3.DatabaseError:
+            # Database may be encrypted or corrupted - cannot check migration
+            return {
+                "needs_migration": False,
+                "collections": [],
+                "total_vectors": 0,
+                "estimated_size_mb": 0.0,
+                "rollback_notes": "",
+            }
+
         try:
             # Check for legacy sqlite-vec tables
             tables = conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'"
             ).fetchall()
+        except sqlite3.DatabaseError:
+            # Database is encrypted or corrupted - cannot check migration
+            conn.close()
+            return {
+                "needs_migration": False,
+                "collections": [],
+                "total_vectors": 0,
+                "estimated_size_mb": 0.0,
+                "rollback_notes": "",
+            }
+
+        try:
             table_names = {t[0] for t in tables}
 
             legacy_collections = []
