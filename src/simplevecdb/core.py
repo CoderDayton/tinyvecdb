@@ -556,7 +556,9 @@ class VectorCollection:
                 generated = embed_fn(texts)
                 # Replace placeholders with generated embeddings
                 for i, emb in enumerate(embeds):
-                    if not emb:  # Empty placeholder
+                    if (
+                        emb is None
+                    ):  # Explicit None placeholder (avoids NumPy truthiness issue)
                         embeds[i] = generated[i]
             except Exception as e:
                 raise ValueError(

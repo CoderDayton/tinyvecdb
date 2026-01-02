@@ -189,9 +189,18 @@ def create_encrypted_connection(
                     "or key is incorrect."
                 )
             _logger.debug("SQLCipher version: %s", result[0])
+
+            # Validate key by actually reading from the database
+            # cipher_version only confirms SQLCipher is loaded, not that the key is correct
+            # Reading sqlite_master forces decryption and will fail with wrong key
+            conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+        except EncryptionError:
+            raise
         except Exception as e:
             conn.close()
-            raise EncryptionError(f"Failed to verify encryption: {e}") from e
+            raise EncryptionError(
+                f"Failed to verify encryption (wrong key?): {e}"
+            ) from e
 
         # Set performance optimizations (same as non-encrypted)
         conn.execute("PRAGMA journal_mode=WAL")
