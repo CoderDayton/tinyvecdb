@@ -18,6 +18,11 @@ import numpy as np
 import pytest
 
 from simplevecdb import VectorDB, EncryptionError, EncryptionUnavailableError
+
+# Test-only encryption keys - NOT for production use
+# nosec: B105 - hardcoded passwords are intentional for testing
+TEST_ENCRYPTION_KEY = "test-only-key-do-not-use-in-production"  # noqa: S105
+TEST_ENCRYPTION_KEY_ALT = "alternate-test-key-for-wrong-key-tests"  # noqa: S105
 from simplevecdb.encryption import (
     _normalize_key,
     _derive_key,
@@ -48,8 +53,8 @@ class TestKeyDerivation:
 
     def test_normalize_key_passphrase(self):
         """String passphrase should derive consistent key."""
-        key1 = _normalize_key("my-secret-passphrase")
-        key2 = _normalize_key("my-secret-passphrase")
+        key1 = _normalize_key(TEST_ENCRYPTION_KEY)
+        key2 = _normalize_key(TEST_ENCRYPTION_KEY)
         assert key1 == key2
         assert len(key1) == AES_KEY_SIZE
 
@@ -63,8 +68,8 @@ class TestKeyDerivation:
     def test_derive_key_with_salt(self):
         """Key derivation with salt should be deterministic."""
         salt = os.urandom(SALT_SIZE)
-        key1 = _derive_key("passphrase", salt)
-        key2 = _derive_key("passphrase", salt)
+        key1 = _derive_key(TEST_ENCRYPTION_KEY, salt)
+        key2 = _derive_key(TEST_ENCRYPTION_KEY, salt)
         assert key1 == key2
         assert len(key1) == AES_KEY_SIZE
 
@@ -72,8 +77,8 @@ class TestKeyDerivation:
         """Different salts should produce different keys."""
         salt1 = os.urandom(SALT_SIZE)
         salt2 = os.urandom(SALT_SIZE)
-        key1 = _derive_key("passphrase", salt1)
-        key2 = _derive_key("passphrase", salt2)
+        key1 = _derive_key(TEST_ENCRYPTION_KEY, salt1)
+        key2 = _derive_key(TEST_ENCRYPTION_KEY_ALT, salt2)
         assert key1 != key2
 
 
@@ -156,7 +161,7 @@ class TestIndexFileEncryption:
         index_file = tmp_path / "test.usearch"
         index_file.write_bytes(b"fake index data")
 
-        encrypt_index_file(index_file, "my-passphrase")
+        encrypt_index_file(index_file, TEST_ENCRYPTION_KEY)
 
         assert not index_file.exists()
         assert (tmp_path / "test.usearch.enc").exists()
@@ -167,10 +172,10 @@ class TestIndexFileEncryption:
         index_file = tmp_path / "test.usearch"
         index_file.write_bytes(original_data)
 
-        encrypt_index_file(index_file, "my-passphrase")
+        encrypt_index_file(index_file, TEST_ENCRYPTION_KEY)
         encrypted_path = tmp_path / "test.usearch.enc"
 
-        decrypted_path = decrypt_index_file(encrypted_path, "my-passphrase")
+        decrypted_path = decrypt_index_file(encrypted_path, TEST_ENCRYPTION_KEY)
 
         assert decrypted_path.read_bytes() == original_data
 
@@ -196,13 +201,12 @@ class TestEncryptedVectorDB:
 
     def test_encrypted_db_roundtrip(self, db_path: Path):
         """Full workflow: create encrypted DB, add data, reopen, search."""
-        passphrase = "test-encryption-key-123"
         dim = 128
         texts = ["hello world", "foo bar", "test document"]
         embeddings = np.random.randn(len(texts), dim).astype(np.float32).tolist()
 
         # Create and populate
-        db = VectorDB(db_path, encryption_key=passphrase)
+        db = VectorDB(db_path, encryption_key=TEST_ENCRYPTION_KEY)
         collection = db.collection("test")
         collection.add_texts(texts, embeddings=embeddings)
         db.save()
@@ -215,7 +219,7 @@ class TestEncryptedVectorDB:
         assert encrypted_index is not None
 
         # Reopen with same key
-        db2 = VectorDB(db_path, encryption_key=passphrase)
+        db2 = VectorDB(db_path, encryption_key=TEST_ENCRYPTION_KEY)
         collection2 = db2.collection("test")
 
         # Should find the documents
@@ -228,18 +232,18 @@ class TestEncryptedVectorDB:
     def test_encrypted_db_wrong_key_fails(self, db_path: Path):
         """Opening encrypted DB with wrong key should fail."""
         # Create with one key
-        db = VectorDB(db_path, encryption_key="correct-key")
+        db = VectorDB(db_path, encryption_key=TEST_ENCRYPTION_KEY)
         db.collection("test")
         db.close()
 
         # Try to open with wrong key
         with pytest.raises(EncryptionError):
-            VectorDB(db_path, encryption_key="wrong-key")
+            VectorDB(db_path, encryption_key=TEST_ENCRYPTION_KEY_ALT)
 
     def test_encrypted_db_no_key_fails(self, db_path: Path):
         """Opening encrypted DB without key should fail."""
         # Create encrypted
-        db = VectorDB(db_path, encryption_key="secret")
+        db = VectorDB(db_path, encryption_key=TEST_ENCRYPTION_KEY)
         db.collection("test")
         db.close()
 
@@ -250,13 +254,12 @@ class TestEncryptedVectorDB:
     def test_memory_db_encryption_not_allowed(self):
         """In-memory databases cannot be encrypted."""
         with pytest.raises(ValueError, match="In-memory databases cannot be encrypted"):
-            VectorDB(":memory:", encryption_key="test")
+            VectorDB(":memory:", encryption_key=TEST_ENCRYPTION_KEY)
 
     def test_encrypted_db_search_performance(self, db_path: Path):
         """Search performance should not degrade with encryption enabled."""
         import time
 
-        passphrase = "performance-test-key"
         dim = 128
         n_vectors = 1000
 
@@ -264,7 +267,7 @@ class TestEncryptedVectorDB:
         embeddings = np.random.randn(n_vectors, dim).astype(np.float32).tolist()
 
         # Create and populate
-        db = VectorDB(db_path, encryption_key=passphrase)
+        db = VectorDB(db_path, encryption_key=TEST_ENCRYPTION_KEY)
         collection = db.collection("perf")
         collection.add_texts(texts, embeddings=embeddings)
 
@@ -292,7 +295,7 @@ class TestSQLCipherConnection:
         try:
             conn = create_encrypted_connection(
                 tmp_path / "test.db",
-                "test-passphrase",
+                TEST_ENCRYPTION_KEY,
             )
             conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, data TEXT)")
             conn.execute("INSERT INTO test (data) VALUES (?)", ("hello",))
@@ -308,7 +311,7 @@ class TestSQLCipherConnection:
         """In-memory encrypted connections should fail."""
         try:
             with pytest.raises(ValueError, match="In-memory"):
-                create_encrypted_connection(":memory:", "key")
+                create_encrypted_connection(":memory:", TEST_ENCRYPTION_KEY)
         except EncryptionUnavailableError:
             pytest.skip("sqlcipher3 not installed")
 
@@ -327,7 +330,7 @@ class TestSQLCipherConnection:
         # Create encrypted database
         try:
             encrypted_path = tmp_path / "encrypted.db"
-            conn = create_encrypted_connection(encrypted_path, "secret")
+            conn = create_encrypted_connection(encrypted_path, TEST_ENCRYPTION_KEY)
             conn.execute("CREATE TABLE test (id INTEGER)")
             conn.close()
 

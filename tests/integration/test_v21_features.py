@@ -23,6 +23,11 @@ try:
 except ImportError:
     HAS_ENCRYPTION = False
 
+# Test-only encryption keys - NOT for production use
+# nosec: B105 - hardcoded passwords are intentional for testing
+TEST_ENCRYPTION_KEY = "test-only-key-do-not-use-in-production"  # noqa: S105
+TEST_ENCRYPTION_KEY_WRONG = "wrong-key-for-testing-failure"  # noqa: S105
+
 
 def generate_chunked_documents(
     num_parents: int = 3, chunks_per_parent: int = 4, dim: int = 8
@@ -69,10 +74,9 @@ def test_encrypted_streaming_hierarchy():
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "encrypted_hierarchy.db")
-        encryption_key = "test-secret-key-for-v21-integration"
 
         # Phase 1: Create encrypted DB and stream hierarchical data
-        db = VectorDB(db_path, encryption_key=encryption_key)
+        db = VectorDB(db_path, encryption_key=TEST_ENCRYPTION_KEY)
         collection = db.collection("docs")  # dimension auto-detected
 
         # Prepare data with hierarchy
@@ -123,7 +127,7 @@ def test_encrypted_streaming_hierarchy():
         db.close()
 
         # Phase 2: Reopen with correct key and verify hierarchy
-        db2 = VectorDB(db_path, encryption_key=encryption_key)
+        db2 = VectorDB(db_path, encryption_key=TEST_ENCRYPTION_KEY)
         collection2 = db2.collection("docs")
 
         # Verify we can retrieve data
@@ -155,7 +159,7 @@ def test_encrypted_streaming_hierarchy():
 
         # Phase 3: Verify wrong key fails
         with pytest.raises(Exception):  # Could be various encryption errors
-            bad_db = VectorDB(db_path, encryption_key="wrong-key")
+            bad_db = VectorDB(db_path, encryption_key=TEST_ENCRYPTION_KEY_WRONG)
             bad_db.collection("docs").count()  # Force access
 
 
