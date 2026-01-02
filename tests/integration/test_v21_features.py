@@ -16,7 +16,8 @@ from simplevecdb import VectorDB
 
 # Check if encryption is available
 try:
-    from simplevecdb.encryption import EncryptionManager
+    import sqlcipher3
+    from simplevecdb.encryption import create_encrypted_connection
 
     HAS_ENCRYPTION = True
 except ImportError:
