@@ -444,7 +444,7 @@ class VectorCollection:
             - batch_ids: IDs of documents in current batch
 
         Returns:
-            List of all inserted document IDs. Collect IDs by extending a list
+            List of all inserted document IDs. To collect IDs, extend a list
             with 'batch_ids' from each yielded progress dictionary (see examples).
 
         Example:
