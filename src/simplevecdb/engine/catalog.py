@@ -608,7 +608,10 @@ class CatalogManager:
         """
         # Validate max_depth parameter to prevent SQL injection
         if max_depth is not None:
-            max_depth = int(max_depth)
+            try:
+                max_depth = int(max_depth)
+            except (ValueError, TypeError) as e:
+                raise ValueError(f"max_depth must be an integer, got {type(max_depth).__name__}: {max_depth}") from e
 
         if max_depth is not None:
             sql = f"""
@@ -665,7 +668,10 @@ class CatalogManager:
         """
         # Validate max_depth parameter to prevent SQL injection
         if max_depth is not None:
-            max_depth = int(max_depth)
+            try:
+                max_depth = int(max_depth)
+            except (ValueError, TypeError) as e:
+                raise ValueError(f"max_depth must be an integer, got {type(max_depth).__name__}: {max_depth}") from e
 
         if max_depth is not None:
             sql = f"""
