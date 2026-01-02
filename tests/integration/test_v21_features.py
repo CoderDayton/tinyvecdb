@@ -113,15 +113,15 @@ def test_encrypted_streaming_hierarchy():
         assert progress_updates[-1]["docs_processed"] == 15  # 3 parents + 12 chunks
 
         # Now set parent relationships (streaming doesn't support parent_ids directly)
-        # We need to manually set them after insert
-        # Parents are at indices 0, 5, 10 (every 5th starting from 0)
-        # Children follow each parent
+        # We need to manually set them after insert.
+        # By construction, parents are at indices 0, 5, 10 (every 5th starting from 0)
+        # and each parent is followed by its 4 children.
         for i, pid in enumerate(parent_ids):
             if pid is not None:
-                # Map the expected parent_id to actual inserted id
-                # Parent 1 -> id 1, Parent 2 -> id 6, Parent 3 -> id 11
-                parent_idx = (pid - 1) // 5  # 0, 1, or 2
-                actual_parent_id = ids[parent_idx * 5]  # First id in each batch of 5
+                # Map this child to its actual parent id based on input ordering:
+                # the parent for any index i is at index (i // 5) * 5.
+                parent_group_idx = i // 5  # 0, 1, 2, ...
+                actual_parent_id = ids[parent_group_idx * 5]  # First id in each group of 5
                 collection.set_parent(ids[i], actual_parent_id)
 
         db.close()
