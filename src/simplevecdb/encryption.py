@@ -42,6 +42,8 @@ AES_NONCE_SIZE = 12  # 96 bits for GCM
 AES_TAG_SIZE = 16  # 128 bits
 SALT_SIZE = 16
 PBKDF2_ITERATIONS = 480000  # OWASP 2023 recommendation for SHA-256
+# Fixed salt for deterministic key normalization (SQLCipher/index compatibility)
+_NORMALIZE_KEY_SALT = b"simplevecdb-sqlcipher-key"
 
 
 class EncryptionError(Exception):
@@ -100,8 +102,16 @@ def _normalize_key(key: str | bytes) -> bytes:
     else:
         key_bytes = key
 
-    # Use SHA-256 directly for raw key derivation (faster, still secure for high-entropy keys)
-    return hashlib.sha256(key_bytes).digest()
+    # Derive a 32-byte key using PBKDF2-HMAC-SHA256 with a fixed salt
+    # This is intentionally deterministic (same input -> same key) while being
+    # computationally expensive enough for password-like passphrases.
+    return hashlib.pbkdf2_hmac(
+        "sha256",
+        key_bytes,
+        _NORMALIZE_KEY_SALT,
+        PBKDF2_ITERATIONS,
+        dklen=AES_KEY_SIZE,
+    )
 
 
 # ============================================================================
