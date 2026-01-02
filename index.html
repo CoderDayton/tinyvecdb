@@ -642,6 +642,23 @@
                 
                 <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class="group/menu-item relative">
     <a data-slot="sidebar-menu-button" data-active="false" data-sidebar="menu-button"
+        data-size="default" href="/SimpleVecDB/api/encryption/"
+        class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground peer/menu-button flex items-center gap-2 rounded-md p-2 text-left outline-hidden ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 data-[active=true]:bg-accent data-[active=true]:border-accent 3xl:fixed:w-full 3xl:fixed:max-w-48 relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md">
+
+        
+        Encryption
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+                
+                <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class="group/menu-item relative">
+    <a data-slot="sidebar-menu-button" data-active="false" data-sidebar="menu-button"
         data-size="default" href="/SimpleVecDB/api/integrations/"
         class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground peer/menu-button flex items-center gap-2 rounded-md p-2 text-left outline-hidden ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 data-[active=true]:bg-accent data-[active=true]:border-accent 3xl:fixed:w-full 3xl:fixed:max-w-48 relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md">
 
@@ -813,7 +830,7 @@
 <script>
     const updatedAt = document.getElementById("updated_at");
     if (updatedAt) {
-        const date = new Date('2025-12-23T05:33:50-06:00');
+        const date = new Date('2026-01-01T20:37:44-06:00');
         updatedAt.textContent = date.toLocaleDateString();
     }
 </script>
@@ -894,6 +911,9 @@ pip<span class="w"> </span>install<span class="w"> </span>simplevecdb
 
 <span class="c1"># With local embeddings server + HuggingFace models (500MB+)</span>
 pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;simplevecdb[server]&quot;</span>
+
+<span class="c1"># With encryption support (SQLCipher)</span>
+pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;simplevecdb[encryption]&quot;</span>
 </code></pre></div>
 
 <p><strong>Verify Installation:</strong></p>
@@ -1027,6 +1047,32 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 <blockquote>
 <p><strong>Tip:</strong> LangChain and LlamaIndex integrations support all search methods.</p>
 </blockquote>
+<h3 id="encryption-v21">Encryption (v2.1+)</h3>
+<p>Protect sensitive data with AES-256 at-rest encryption:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">simplevecdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorDB</span>
+
+<span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;secure.db&quot;</span><span class="p">,</span> <span class="n">encryption_key</span><span class="o">=</span><span class="s2">&quot;your-secret-key&quot;</span><span class="p">)</span>
+<span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;confidential&quot;</span><span class="p">)</span>
+<span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">([</span><span class="s2">&quot;sensitive data&quot;</span><span class="p">],</span> <span class="n">embeddings</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.1</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">])</span>
+</code></pre></div>
+
+<h3 id="streaming-insert-v21">Streaming Insert (v2.1+)</h3>
+<p>Memory-efficient ingestion for large datasets:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">for</span> <span class="n">progress</span> <span class="ow">in</span> <span class="n">collection</span><span class="o">.</span><span class="n">add_texts_streaming</span><span class="p">(</span><span class="n">documents</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Processed </span><span class="si">{</span><span class="n">progress</span><span class="p">[</span><span class="s1">&#39;docs_processed&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> documents&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="document-hierarchies-v21">Document Hierarchies (v2.1+)</h3>
+<p>Organize documents in parent-child relationships:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">parent_ids</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">([</span><span class="s2">&quot;Main doc&quot;</span><span class="p">],</span> <span class="n">embeddings</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.1</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">])</span>
+<span class="n">child_ids</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span>
+    <span class="p">[</span><span class="s2">&quot;Chunk 1&quot;</span><span class="p">,</span> <span class="s2">&quot;Chunk 2&quot;</span><span class="p">],</span>
+    <span class="n">embeddings</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.11</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.12</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">],</span>
+    <span class="n">parent_ids</span><span class="o">=</span><span class="p">[</span><span class="n">parent_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">parent_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+<span class="p">)</span>
+<span class="n">children</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">get_children</span><span class="p">(</span><span class="n">parent_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</code></pre></div>
+
 <h2 id="feature-matrix">Feature Matrix</h2>
 <div class="table-wrapper"><table>
 <thead>
@@ -1099,8 +1145,18 @@ pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Built-in Encryption</strong></td>
-<td style="text-align: left;">🔜</td>
-<td style="text-align: left;">SQLCipher integration for at-rest encryption</td>
+<td style="text-align: left;">✅</td>
+<td style="text-align: left;">SQLCipher AES-256 at-rest encryption via <code>[encryption]</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Streaming Insert</strong></td>
+<td style="text-align: left;">✅</td>
+<td style="text-align: left;">Memory-efficient large-scale ingestion with progress</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Document Hierarchies</strong></td>
+<td style="text-align: left;">✅</td>
+<td style="text-align: left;">Parent/child relationships for chunked docs</td>
 </tr>
 </tbody>
 </table></div>
@@ -1198,9 +1254,11 @@ pip<span class="w"> </span>install<span class="w"> </span>torch<span class="w"> 
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> HNSW indexing (usearch backend)</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Batch search API</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Auto memory-mapping for large indexes</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> SQLCipher encryption (at-rest data protection)</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Streaming insert API for large-scale ingestion</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Graph-based metadata relationships</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> SQLCipher encryption (at-rest data protection)</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Streaming insert API for large-scale ingestion</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> Hierarchical document relationships (parent/child)</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Cross-collection search</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Vector clustering and auto-tagging</li>
 </ul>
 <p>Vote on features or propose new ones in <a href="https://github.com/coderdayton/simplevecdb/discussions">GitHub Discussions</a>.</p>
 <h2 id="contributing">Contributing</h2>
@@ -1338,6 +1396,12 @@ pip<span class="w"> </span>install<span class="w"> </span>torch<span class="w"> 
                         <a class="text-2xl font-medium" href="api/embeddings/">
                             
                             Embeddings
+                            
+                        </a>
+                        
+                        <a class="text-2xl font-medium" href="api/encryption/">
+                            
+                            Encryption
                             
                         </a>
                         
@@ -1479,6 +1543,24 @@ pip<span class="w"> </span>install<span class="w"> </span>torch<span class="w"> 
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
             data-active="false" data-depth="3">
             Search Capabilities
+        </a>
+        
+        <a href="#encryption-v21"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3">
+            Encryption (v2.1+)
+        </a>
+        
+        <a href="#streaming-insert-v21"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3">
+            Streaming Insert (v2.1+)
+        </a>
+        
+        <a href="#document-hierarchies-v21"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3">
+            Document Hierarchies (v2.1+)
         </a>
         
         

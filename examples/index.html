@@ -642,6 +642,23 @@
                 
                 <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class="group/menu-item relative">
     <a data-slot="sidebar-menu-button" data-active="false" data-sidebar="menu-button"
+        data-size="default" href="/SimpleVecDB/api/encryption/"
+        class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground peer/menu-button flex items-center gap-2 rounded-md p-2 text-left outline-hidden ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 data-[active=true]:bg-accent data-[active=true]:border-accent 3xl:fixed:w-full 3xl:fixed:max-w-48 relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md">
+
+        
+        Encryption
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+                
+                <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class="group/menu-item relative">
+    <a data-slot="sidebar-menu-button" data-active="false" data-sidebar="menu-button"
         data-size="default" href="/SimpleVecDB/api/integrations/"
         class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground peer/menu-button flex items-center gap-2 rounded-md p-2 text-left outline-hidden ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 data-[active=true]:bg-accent data-[active=true]:border-accent 3xl:fixed:w-full 3xl:fixed:max-w-48 relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md">
 
@@ -838,7 +855,7 @@
 <script>
     const updatedAt = document.getElementById("updated_at");
     if (updatedAt) {
-        const date = new Date('2025-12-23T05:33:50-06:00');
+        const date = new Date('2026-01-01T20:37:44-06:00');
         updatedAt.textContent = date.toLocaleDateString();
     }
 </script>
@@ -932,6 +949,119 @@
     <span class="n">query</span><span class="p">,</span>
     <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
     <span class="nb">filter</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;tech&quot;</span><span class="p">}</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="encrypted-database-v21">Encrypted Database (v2.1+)</h3>
+<div class="codehilite"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;simplevecdb[encryption]&quot;</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">simplevecdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorDB</span>
+
+<span class="c1"># Create encrypted database with SQLCipher</span>
+<span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;secure.db&quot;</span><span class="p">,</span> <span class="n">encryption_key</span><span class="o">=</span><span class="s2">&quot;your-secret-key&quot;</span><span class="p">)</span>
+<span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;confidential&quot;</span><span class="p">)</span>
+
+<span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span>
+    <span class="p">[</span><span class="s2">&quot;sensitive financial data&quot;</span><span class="p">,</span> <span class="s2">&quot;private health records&quot;</span><span class="p">],</span>
+    <span class="n">embeddings</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.1</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.2</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">],</span>
+    <span class="n">metadatas</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;finance&quot;</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;health&quot;</span><span class="p">}]</span>
+<span class="p">)</span>
+<span class="n">db</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+<span class="c1"># Reopen requires the same encryption key</span>
+<span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;secure.db&quot;</span><span class="p">,</span> <span class="n">encryption_key</span><span class="o">=</span><span class="s2">&quot;your-secret-key&quot;</span><span class="p">)</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;confidential&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">([</span><span class="mf">0.1</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Wrong key will fail</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">bad_db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;secure.db&quot;</span><span class="p">,</span> <span class="n">encryption_key</span><span class="o">=</span><span class="s2">&quot;wrong-key&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Access denied: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="streaming-insert-v21">Streaming Insert (v2.1+)</h3>
+<p>Memory-efficient ingestion for large datasets:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">simplevecdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorDB</span>
+
+<span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;large_dataset.db&quot;</span><span class="p">)</span>
+<span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;docs&quot;</span><span class="p">)</span>
+
+<span class="c1"># Generator function for memory efficiency</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">load_documents</span><span class="p">():</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;large_file.jsonl&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">doc</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="p">(</span>
+                <span class="n">doc</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">],</span>
+                <span class="n">doc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;metadata&quot;</span><span class="p">,</span> <span class="p">{}),</span>
+                <span class="n">doc</span><span class="p">[</span><span class="s2">&quot;embedding&quot;</span><span class="p">]</span>
+            <span class="p">)</span>
+
+<span class="c1"># Stream with progress tracking</span>
+<span class="k">for</span> <span class="n">progress</span> <span class="ow">in</span> <span class="n">collection</span><span class="o">.</span><span class="n">add_texts_streaming</span><span class="p">(</span><span class="n">load_documents</span><span class="p">(),</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Batch </span><span class="si">{</span><span class="n">progress</span><span class="p">[</span><span class="s1">&#39;batch_num&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">progress</span><span class="p">[</span><span class="s1">&#39;docs_processed&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> total docs&quot;</span><span class="p">)</span>
+
+<span class="c1"># With callback instead of iteration</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">log_progress</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">p</span><span class="p">[</span><span class="s1">&#39;docs_processed&#39;</span><span class="p">]</span> <span class="o">%</span> <span class="mi">10000</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Milestone: </span><span class="si">{</span><span class="n">p</span><span class="p">[</span><span class="s1">&#39;docs_processed&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> docs&quot;</span><span class="p">)</span>
+
+<span class="nb">list</span><span class="p">(</span><span class="n">collection</span><span class="o">.</span><span class="n">add_texts_streaming</span><span class="p">(</span>
+    <span class="n">load_documents</span><span class="p">(),</span>
+    <span class="n">batch_size</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
+    <span class="n">on_progress</span><span class="o">=</span><span class="n">log_progress</span>
+<span class="p">))</span>
+</code></pre></div>
+
+<h3 id="document-hierarchies-v21">Document Hierarchies (v2.1+)</h3>
+<p>Organize documents in parent-child trees for chunked documents, threads, or nested content:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">simplevecdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorDB</span>
+
+<span class="n">db</span> <span class="o">=</span> <span class="n">VectorDB</span><span class="p">(</span><span class="s2">&quot;hierarchical.db&quot;</span><span class="p">)</span>
+<span class="n">collection</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">collection</span><span class="p">(</span><span class="s2">&quot;docs&quot;</span><span class="p">)</span>
+
+<span class="c1"># Add parent documents (e.g., full articles)</span>
+<span class="n">parent_ids</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span>
+    <span class="p">[</span><span class="s2">&quot;Chapter 1: Introduction to ML&quot;</span><span class="p">,</span> <span class="s2">&quot;Chapter 2: Neural Networks&quot;</span><span class="p">],</span>
+    <span class="n">embeddings</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.1</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.2</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">],</span>
+    <span class="n">metadatas</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;chapter&quot;</span><span class="p">,</span> <span class="s2">&quot;num&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;chapter&quot;</span><span class="p">,</span> <span class="s2">&quot;num&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">}]</span>
+<span class="p">)</span>
+
+<span class="c1"># Add children with parent references (e.g., chunks/sections)</span>
+<span class="n">child_ids</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">add_texts</span><span class="p">(</span>
+    <span class="p">[</span><span class="s2">&quot;Section 1.1: What is ML?&quot;</span><span class="p">,</span> <span class="s2">&quot;Section 1.2: History of ML&quot;</span><span class="p">,</span> <span class="s2">&quot;Section 2.1: Perceptrons&quot;</span><span class="p">],</span>
+    <span class="n">embeddings</span><span class="o">=</span><span class="p">[[</span><span class="mf">0.11</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.12</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.21</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">],</span>
+    <span class="n">metadatas</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;section&quot;</span><span class="p">,</span> <span class="s2">&quot;chapter&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;section&quot;</span><span class="p">,</span> <span class="s2">&quot;chapter&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;section&quot;</span><span class="p">,</span> <span class="s2">&quot;chapter&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+    <span class="p">],</span>
+    <span class="n">parent_ids</span><span class="o">=</span><span class="p">[</span><span class="n">parent_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">parent_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">parent_ids</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
+<span class="p">)</span>
+
+<span class="c1"># Navigate the hierarchy</span>
+<span class="n">children</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">get_children</span><span class="p">(</span><span class="n">parent_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Chapter 1 has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">children</span><span class="p">)</span><span class="si">}</span><span class="s2"> sections&quot;</span><span class="p">)</span>
+
+<span class="n">parent</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">get_parent</span><span class="p">(</span><span class="n">child_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Section belongs to: </span><span class="si">{</span><span class="n">parent</span><span class="o">.</span><span class="n">page_content</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Get all descendants (recursive)</span>
+<span class="n">all_descendants</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">get_descendants</span><span class="p">(</span><span class="n">parent_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="c1"># Get ancestors (path to root)</span>
+<span class="n">ancestors</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">get_ancestors</span><span class="p">(</span><span class="n">child_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="c1"># Reparent a document</span>
+<span class="n">collection</span><span class="o">.</span><span class="n">set_parent</span><span class="p">(</span><span class="n">child_ids</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">parent_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># Move section to Chapter 1</span>
+
+<span class="c1"># Search within a subtree</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">similarity_search</span><span class="p">(</span>
+    <span class="p">[</span><span class="mf">0.1</span><span class="p">]</span><span class="o">*</span><span class="mi">384</span><span class="p">,</span>
+    <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="nb">filter</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;section&quot;</span><span class="p">,</span> <span class="s2">&quot;chapter&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
 <span class="p">)</span>
 </code></pre></div>
 
@@ -1083,6 +1213,12 @@
                             
                         </a>
                         
+                        <a class="text-2xl font-medium" href="../api/encryption/">
+                            
+                            Encryption
+                            
+                        </a>
+                        
                         <a class="text-2xl font-medium" href="../api/integrations/">
                             
                             Integrations
@@ -1203,6 +1339,24 @@
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
             data-active="false" data-depth="3">
             Metadata Filtering
+        </a>
+        
+        <a href="#encrypted-database-v21"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3">
+            Encrypted Database (v2.1+)
+        </a>
+        
+        <a href="#streaming-insert-v21"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3">
+            Streaming Insert (v2.1+)
+        </a>
+        
+        <a href="#document-hierarchies-v21"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3">
+            Document Hierarchies (v2.1+)
         </a>
         
         <a href="#async-usage"
