@@ -337,3 +337,45 @@ class TestSQLCipherConnection:
             assert is_database_encrypted(encrypted_path)
         except EncryptionUnavailableError:
             pytest.skip("sqlcipher3 not installed")
+
+    def test_create_encrypted_connection_raw_key(self, tmp_path: Path):
+        """Should work with raw 32-byte key."""
+        try:
+            raw_key = os.urandom(AES_KEY_SIZE)  # 32 bytes
+            conn = create_encrypted_connection(
+                tmp_path / "test_raw.db",
+                raw_key,
+            )
+            conn.execute("CREATE TABLE test (id INTEGER)")
+            conn.commit()
+            conn.close()
+
+            # Reopen with same key
+            conn2 = create_encrypted_connection(tmp_path / "test_raw.db", raw_key)
+            result = conn2.execute("SELECT count(*) FROM test").fetchone()
+            assert result[0] == 0
+            conn2.close()
+        except EncryptionUnavailableError:
+            pytest.skip("sqlcipher3 not installed")
+
+    def test_create_encrypted_connection_bytes_passphrase(self, tmp_path: Path):
+        """Should work with bytes passphrase (non-32-byte)."""
+        try:
+            bytes_key = (
+                b"short-bytes-key"  # Not 32 bytes, will be treated as passphrase
+            )
+            conn = create_encrypted_connection(
+                tmp_path / "test_bytes.db",
+                bytes_key,
+            )
+            conn.execute("CREATE TABLE test (id INTEGER)")
+            conn.commit()
+            conn.close()
+
+            # Reopen with same key
+            conn2 = create_encrypted_connection(tmp_path / "test_bytes.db", bytes_key)
+            result = conn2.execute("SELECT count(*) FROM test").fetchone()
+            assert result[0] == 0
+            conn2.close()
+        except EncryptionUnavailableError:
+            pytest.skip("sqlcipher3 not installed")
