@@ -112,15 +112,20 @@ def test_encrypted_streaming_hierarchy():
         assert progress_updates[-1]["docs_processed"] == 15  # 3 parents + 12 chunks
 
         # Now set parent relationships (streaming doesn't support parent_ids directly)
-        # We need to manually set them after insert
-        # Parents are at indices 0, 5, 10 (every 5th starting from 0)
-        # Children follow each parent
+        # Note: generate_chunked_documents() yields predicted parent_id values
+        # based on expected database ID assignment (starting at 1, incrementing).
+        # After streaming insert, we map these predicted IDs to actual assigned IDs.
+        # 
+        # Data structure: 15 documents in groups of 5 (parent + 4 children):
+        #   Group 0: indices 0-4 (parent at 0, children at 1-4)
+        #   Group 1: indices 5-9 (parent at 5, children at 6-9)
+        #   Group 2: indices 10-14 (parent at 10, children at 11-14)
         for i, pid in enumerate(parent_ids):
             if pid is not None:
-                # Map the expected parent_id to actual inserted id
-                # Parent 1 -> id 1, Parent 2 -> id 6, Parent 3 -> id 11
-                parent_idx = (pid - 1) // 5  # 0, 1, or 2
-                actual_parent_id = ids[parent_idx * 5]  # First id in each batch of 5
+                # pid is the predicted parent ID from the generator (1, 6, or 11)
+                # Convert to the index of the parent in our inserted documents
+                parent_idx = (pid - 1) // 5  # Maps 1->0, 6->1, 11->2
+                actual_parent_id = ids[parent_idx * 5]  # Get actual DB ID for that parent
                 collection.set_parent(ids[i], actual_parent_id)
 
         db.close()

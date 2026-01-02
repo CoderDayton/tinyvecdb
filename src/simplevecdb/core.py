@@ -435,6 +435,11 @@ class VectorCollection:
             threads: Threads for parallel insertion (0=auto).
             on_progress: Optional callback invoked after each batch.
 
+        Note:
+            This method does not currently support setting parent relationships
+            during insertion. Use `set_parent()` after streaming to establish
+            hierarchical relationships.
+
         Yields:
             StreamingProgress dict after each batch with:
             - batch_num: Current batch number (1-indexed)
